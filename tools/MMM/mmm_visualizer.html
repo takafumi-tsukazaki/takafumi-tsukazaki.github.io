@@ -1,0 +1,1311 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MMM Function Visualizer (Robyn-based)</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'Helvetica Neue', 'Hiragino Sans', 'Hiragino Kaku Gothic ProN', 'Yu Gothic', sans-serif;
+    background: #0d0d14;
+    color: #e8e6f0;
+    min-height: 100vh;
+    padding: 2rem;
+  }
+
+  h1 {
+    font-size: 1.1rem;
+    font-weight: 400;
+    color: #9b96c0;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    margin-bottom: 0.25rem;
+  }
+  h2 {
+    font-size: 2rem;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    margin-bottom: 0.4rem;
+  }
+  .title-disclaimer {
+    font-size: 0.72rem;
+    color: #5a5870;
+    margin-bottom: 1.5rem;
+    line-height: 1.6;
+  }
+
+  .data-selector {
+    background: #16161f;
+    border: 1px solid #2a2a3a;
+    border-radius: 12px;
+    padding: 1.25rem 1.5rem;
+    margin-bottom: 2rem;
+    display: inline-flex;
+    align-items: center;
+    gap: 1.5rem;
+  }
+  .data-selector label {
+    font-size: 0.85rem;
+    letter-spacing: 0.05em;
+    color: #9b96c0;
+    font-weight: 500;
+  }
+  .data-selector select {
+    background: #0d0d14;
+    color: #e8e6f0;
+    border: 1px solid #2a2a3a;
+    padding: 0.6rem 1.2rem;
+    border-radius: 8px;
+    font-size: 0.95rem;
+    outline: none;
+    cursor: pointer;
+    font-family: inherit;
+    transition: border-color 0.2s;
+  }
+  .data-selector select:focus, .data-selector select:hover {
+    border-color: #6c63e0;
+  }
+
+  .grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1.5rem;
+    margin-bottom: 3rem;
+  }
+
+  .panel {
+    background: #16161f;
+    border: 1px solid #2a2a3a;
+    border-radius: 16px;
+    padding: 1.75rem;
+    position: relative;
+    overflow: hidden;
+  }
+  .panel::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 2px;
+    border-radius: 16px 16px 0 0;
+  }
+  .panel.adstock::before, .panel.adstock-ts::before { background: linear-gradient(90deg, #6c63e0, #a78bfa); }
+  .panel.saturation::before, .panel.saturation-ts::before { background: linear-gradient(90deg, #0ea5e9, #38bdf8); }
+  .panel.carryover::before { background: linear-gradient(90deg, #d97706, #fbbf24); }
+
+  .panel-title {
+    font-size: 1.3rem;
+    font-weight: 700;
+    margin-bottom: 0.25rem;
+    letter-spacing: -0.01em;
+  }
+  .panel.adstock .panel-title, .panel.adstock-ts .panel-title { color: #a78bfa; }
+  .panel.saturation .panel-title, .panel.saturation-ts .panel-title { color: #38bdf8; }
+  .panel.carryover .panel-title { color: #fbbf24; }
+
+  .panel-subtitle {
+    font-size: 0.8rem;
+    color: #5a5870;
+    margin-bottom: 1.5rem;
+    letter-spacing: 0.05em;
+  }
+
+  .legend {
+    display: flex;
+    gap: 1.2rem;
+    font-size: 0.75rem;
+    color: #6a677a;
+    margin-bottom: 1rem;
+    margin-top: -0.5rem;
+  }
+  .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+  .legend-line {
+    width: 20px;
+    height: 2px;
+  }
+  .legend-line.dashed { border-top: 2px dashed #5a5870; background: transparent; }
+  .legend-line.solid-adstock { background: #a78bfa; }
+  .legend-line.solid-sat { background: #38bdf8; }
+  .legend-line.solid-imme { background: #fbbf24; }
+  .legend-line.solid-carry { background: #f97316; }
+
+  canvas {
+    width: 100%;
+    height: 220px;
+    display: block;
+    border-radius: 8px;
+    background: #0d0d14;
+    margin-bottom: 1.5rem;
+  }
+  canvas.short { height: 160px; }
+
+  .controls { display: flex; flex-direction: column; gap: 1.2rem; }
+  .control-row { display: flex; flex-direction: column; gap: 0.4rem; }
+  .control-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+  }
+
+  .param-name {
+    font-size: 0.8rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: #6a677a;
+    font-weight: 500;
+  }
+
+  .param-value {
+    font-size: 1rem;
+    font-weight: 700;
+    font-family: 'Courier New', monospace;
+  }
+  .panel.adstock .param-value { color: #a78bfa; }
+  .panel.saturation .param-value { color: #38bdf8; }
+
+  .slider-wrap {
+    position: relative;
+    height: 4px;
+    background: #2a2a3a;
+    border-radius: 2px;
+    margin: 4px 0;
+  }
+  .slider-fill {
+    position: absolute;
+    left: 0; top: 0; bottom: 0;
+    border-radius: 2px;
+    pointer-events: none;
+  }
+  .panel.adstock .slider-fill { background: linear-gradient(90deg, #6c63e0, #a78bfa); }
+  .panel.saturation .slider-fill { background: linear-gradient(90deg, #0ea5e9, #38bdf8); }
+
+  input[type=range] {
+    -webkit-appearance: none;
+    appearance: none;
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    left: 0; right: 0;
+    width: 100%;
+    height: 4px;
+    background: transparent;
+    cursor: pointer;
+    margin: 0;
+  }
+  input[type=range]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 18px; height: 18px;
+    border-radius: 50%;
+    background: #e8e6f0;
+    border: 2px solid #2a2a3a;
+    box-shadow: 0 0 0 3px rgba(167,139,250,0.2);
+    cursor: pointer;
+    transition: box-shadow 0.15s;
+  }
+  .panel.saturation input[type=range]::-webkit-slider-thumb {
+    box-shadow: 0 0 0 3px rgba(56,189,248,0.2);
+  }
+  input[type=range]:hover::-webkit-slider-thumb { box-shadow: 0 0 0 5px rgba(167,139,250,0.3); }
+  .panel.saturation input[type=range]:hover::-webkit-slider-thumb { box-shadow: 0 0 0 5px rgba(56,189,248,0.3); }
+
+  .formula-box {
+    margin-top: 1.5rem;
+    padding: 0.9rem 1.1rem;
+    background: #0d0d14;
+    border: 1px solid #2a2a3a;
+    border-radius: 8px;
+    font-size: 0.78rem;
+    color: #5a5870;
+    line-height: 1.7;
+  }
+  .formula-box code {
+    font-family: 'Courier New', monospace;
+    font-size: 0.82rem;
+  }
+  .panel.adstock .formula-box code { color: #a78bfa; }
+  .panel.saturation .formula-box code { color: #38bdf8; }
+
+  .adstock-type-select {
+    background: #0d0d14;
+    color: #e8e6f0;
+    border: 1px solid #2a2a3a;
+    padding: 0.55rem 1rem;
+    border-radius: 8px;
+    font-size: 0.9rem;
+    outline: none;
+    cursor: pointer;
+    font-family: inherit;
+    width: 100%;
+    transition: border-color 0.2s;
+  }
+  .adstock-type-select:focus, .adstock-type-select:hover {
+    border-color: #6c63e0;
+  }
+
+  /* Immediate vs Carryover panel */
+  .carryover-panel {
+    grid-column: 1 / -1;
+  }
+
+  .ratio-display {
+    display: flex;
+    gap: 2rem;
+    margin-bottom: 1.5rem;
+    flex-wrap: wrap;
+  }
+
+  .ratio-card {
+    background: #0d0d14;
+    border: 1px solid #2a2a3a;
+    border-radius: 10px;
+    padding: 1rem 1.5rem;
+    min-width: 160px;
+    text-align: center;
+  }
+  .ratio-card-label {
+    font-size: 0.72rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: #5a5870;
+    margin-bottom: 0.4rem;
+  }
+  .ratio-card-value {
+    font-size: 1.8rem;
+    font-weight: 700;
+    font-family: 'Courier New', monospace;
+  }
+  .ratio-card-value.imme { color: #fbbf24; }
+  .ratio-card-value.carry { color: #f97316; }
+  .ratio-card-value.inflation { color: #a78bfa; }
+
+  .stacked-bar-wrap {
+    height: 32px;
+    border-radius: 8px;
+    overflow: hidden;
+    display: flex;
+    margin-bottom: 0.6rem;
+    background: #0d0d14;
+  }
+  .bar-imme {
+    background: linear-gradient(90deg, #d97706, #fbbf24);
+    transition: width 0.4s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.75rem;
+    font-weight: 700;
+    color: #0d0d14;
+    overflow: hidden;
+    white-space: nowrap;
+  }
+  .bar-carry {
+    background: linear-gradient(90deg, #c2410c, #f97316);
+    transition: width 0.4s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.75rem;
+    font-weight: 700;
+    color: #fff8f0;
+    overflow: hidden;
+    white-space: nowrap;
+  }
+  .bar-label {
+    font-size: 0.7rem;
+    color: #5a5870;
+    display: flex;
+    justify-content: space-between;
+    margin-top: 0.4rem;
+  }
+
+  .carryover-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1.5rem;
+  }
+
+  .decay-weight-section {
+    margin-top: 1rem;
+  }
+  .decay-weight-label {
+    font-size: 0.75rem;
+    color: #5a5870;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    margin-bottom: 0.6rem;
+  }
+
+  @media (max-width: 900px) {
+    .grid { grid-template-columns: 1fr; }
+    .carryover-panel { grid-column: 1; }
+    .carryover-grid { grid-template-columns: 1fr; }
+    h2 { font-size: 1.5rem; }
+    .data-selector { flex-direction: column; align-items: flex-start; gap: 0.8rem; }
+  }
+
+  .copyright {
+    position: fixed;
+    bottom: 10px;
+    right: 14px;
+    font-size: 0.65rem;
+    color: #3a3850;
+    letter-spacing: 0.04em;
+    pointer-events: none;
+    user-select: none;
+  }
+</style>
+</head>
+<body>
+
+<h1>Marketing Mix Modeling</h1>
+<h2>Function Visualizer</h2>
+<p class="title-disclaimer">This visualizer is based on Meta's MMM Analysis tool Robyn, but does not guarantee exact numerical equivalence.</p>
+
+<div class="data-selector">
+  <label for="dataType">Select base data shape</label>
+  <select id="dataType">
+    <option value="1">(1) Constant function (flat line)</option>
+    <option value="2">(2) Increasing line (simple case)</option>
+    <option value="3">(3) Decreasing line (simple case)</option>
+    <option value="4">(4) Increasing then decreasing line</option>
+    <option value="5">(5) Decreasing then increasing line</option>
+    <option value="6">(6) Time series oscillating around a constant</option>
+    <option value="7" selected>(7) Time series oscillating with upward trend</option>
+    <option value="8">(8) Time series oscillating with downward trend</option>
+  </select>
+</div>
+
+<div class="grid">
+
+  <div class="panel adstock">
+    <div class="panel-title">Adstock Function</div>
+    <div class="panel-subtitle">X-axis: lag periods within window(1-windlen), Y-axis: normalized decay weights</div>
+
+    <canvas id="adstockCanvas" role="img" aria-label="Adstock function graph"></canvas>
+
+    <div class="controls">
+      <!-- Adstock function type selector -->
+      <div class="control-row">
+        <div class="param-name" style="margin-bottom:0.5rem;">Adstock Function Type</div>
+        <select id="adstockType" class="adstock-type-select">
+          <option value="geometric">Geometric</option>
+          <option value="weibull_pdf" selected>Weibull PDF</option>
+          <option value="weibull_cdf">Weibull CDF</option>
+        </select>
+      </div>
+
+      <!-- Theta control (Geometric only) -->
+      <div class="control-row" id="thetaControl" style="display:none;">
+        <div class="control-header">
+          <span class="param-name">Theta (Decay Rate)</span>
+          <span class="param-value" id="thetaVal">0.50</span>
+        </div>
+        <div class="slider-wrap">
+          <div class="slider-fill" id="thetaFill"></div>
+          <input type="range" id="theta" min="0.01" max="0.99" step="0.01" value="0.5">
+        </div>
+        <div style="display:flex;justify-content:space-between;font-size:0.7rem;color:#3a3850;margin-top:2px;">
+          <span>0</span><span>1</span>
+        </div>
+      </div>
+
+      <!-- Shape control (Weibull only) -->
+      <div class="control-row" id="shapeControl">
+        <div class="control-header">
+          <span class="param-name">Shape（k）</span>
+          <span class="param-value" id="shapeVal">2.50</span>
+        </div>
+        <div class="slider-wrap">
+          <div class="slider-fill" id="shapeFill"></div>
+          <input type="range" id="shape" min="0.01" max="8" step="0.01" value="2.5">
+        </div>
+        <div style="display:flex;justify-content:space-between;font-size:0.7rem;color:#3a3850;margin-top:2px;">
+          <span>0</span><span>8</span>
+        </div>
+      </div>
+
+      <!-- Scale control (Weibull only) -->
+      <div class="control-row" id="scaleControl">
+        <div class="control-header">
+          <span class="param-name">Scale（Quantile Ratio: λ）</span>
+          <span class="param-value" id="scaleVal">0.50</span>
+        </div>
+        <div class="slider-wrap">
+          <div class="slider-fill" id="scaleFill"></div>
+          <input type="range" id="scale" min="0.01" max="1" step="0.01" value="0.5">
+        </div>
+        <div style="display:flex;justify-content:space-between;font-size:0.7rem;color:#3a3850;margin-top:2px;">
+          <span>0</span><span>1（upper bound ratio of peak position）</span>
+        </div>
+      </div>
+
+      <!-- Lag control (always shown) -->
+      <div class="control-row">
+        <div class="control-header">
+          <span class="param-name">Max Lag / windlen（Modeling window）</span>
+          <span class="param-value" id="lagVal">30</span>
+        </div>
+        <div class="slider-wrap">
+          <div class="slider-fill" id="lagFill"></div>
+          <input type="range" id="lag" min="1" max="120" step="1" value="30">
+        </div>
+        <div style="display:flex;justify-content:space-between;font-size:0.7rem;color:#3a3850;margin-top:2px;">
+          <span>1</span><span>120</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="formula-box" id="adstockFormulaBox">
+      Weibull Adstock (PDF)<br>
+      <code>scaleTrans = quantile(1:windlen, scale)</code>（convert to actual lag position）<br>
+      <code>w(l) = normalize( dweibull(l, shape, scaleTrans) )</code> for l = 1..windlen<br>
+      <code>normalize: (x − min) / (max − min)</code>（0〜1にmin-max正規化）<br>
+      <code>x_decayed[t] = Σ_{l=0}^{windlen-1} x[t-l] * w[l]</code>（matrix convolution）
+    </div>
+  </div>
+
+  <div class="panel saturation">
+    <div class="panel-title">Saturation Function</div>
+    <div class="panel-subtitle">HILL function — ad spend saturation effect model（gamma is relative to max(x)）</div>
+
+    <canvas id="satCanvas" role="img" aria-label="Saturation Hill function graph"></canvas>
+
+    <div class="controls">
+      <div class="control-row">
+        <div class="control-header">
+          <span class="param-name">Alpha（Slope）</span>
+          <span class="param-value" id="alphaVal">1.00</span>
+        </div>
+        <div class="slider-wrap">
+          <div class="slider-fill" id="alphaFill"></div>
+          <input type="range" id="alpha" min="0.01" max="2" step="0.01" value="1">
+        </div>
+        <div style="display:flex;justify-content:space-between;font-size:0.7rem;color:#3a3850;margin-top:2px;">
+          <span>0</span><span>2</span>
+        </div>
+      </div>
+      <div class="control-row">
+        <div class="control-header">
+          <span class="param-name">Gamma（Half-saturation Ratio: fraction of max(x)）</span>
+          <span class="param-value" id="gammaVal">0.50</span>
+        </div>
+        <div class="slider-wrap">
+          <div class="slider-fill" id="gammaFill"></div>
+          <input type="range" id="gamma" min="0.01" max="1.5" step="0.01" value="0.5">
+        </div>
+        <div style="display:flex;justify-content:space-between;font-size:0.7rem;color:#3a3850;margin-top:2px;">
+          <span>0</span><span>1.5</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="formula-box">
+      Hill Function（Saturation Curve）— Robyn spec<br>
+      <code>inflexion = max(x_adstocked) × γ</code><br>
+      <code>S(x) = x^α / (x^α + inflexion^α)</code><br>
+      <span style="font-size:0.72rem;">α = Alpha &nbsp;|&nbsp; γ = Gamma（relative half-saturation point against actual data range）</span>
+    </div>
+  </div>
+
+  <div class="panel adstock-ts">
+    <div class="panel-title">Adstock Applied Time Series</div>
+    <div class="panel-subtitle">Result of convoling Adstock (carryover effect) onto the selected data</div>
+    
+    <div class="legend">
+      <div class="legend-item"><div class="legend-line dashed"></div>Base data</div>
+      <div class="legend-item"><div class="legend-line solid-adstock"></div>After Adstock</div>
+    </div>
+    
+    <canvas id="adstockTsCanvas" role="img" aria-label="Adstock timeseries graph"></canvas>
+  </div>
+
+  <div class="panel saturation-ts">
+    <div class="panel-title">Saturation Applied Time Series</div>
+    <div class="panel-subtitle">Saturation (diminishing returns) applied to the Adstock-transformed data</div>
+    
+    <div class="legend">
+      <div class="legend-item"><div class="legend-line dashed"></div>After Adstock</div>
+      <div class="legend-item"><div class="legend-line solid-sat"></div>After Saturation</div>
+    </div>
+
+    <canvas id="satTsCanvas" role="img" aria-label="Saturation timeseries graph"></canvas>
+  </div>
+
+  <!-- Immediate vs Carryover panel: full width -->
+  <div class="panel carryover carryover-panel">
+    <div class="panel-title">Immediate vs Carryover（Robyn Onepager）</div>
+    <div class="panel-subtitle">Decomposition of immediate and carryover effects determined by Adstock parameters - contribution ratios after Saturation</div>
+
+    <div class="carryover-grid">
+      <!-- Left: ratio cards + stacked bar -->
+      <div>
+        <div class="ratio-display">
+          <div class="ratio-card">
+            <div class="ratio-card-label">Immediate</div>
+            <div class="ratio-card-value imme" id="immeRatio">—</div>
+          </div>
+          <div class="ratio-card">
+            <div class="ratio-card-label">Carryover</div>
+            <div class="ratio-card-value carry" id="carryRatio">—</div>
+          </div>
+          <div class="ratio-card">
+            <div class="ratio-card-label">Inflation（Adstock Multiplier）</div>
+            <div class="ratio-card-value inflation" id="inflationRatio">—</div>
+          </div>
+        </div>
+
+        <div class="stacked-bar-wrap" id="stackedBar">
+          <div class="bar-imme" id="barImme" style="width:50%">Immediate</div>
+          <div class="bar-carry" id="barCarry" style="width:50%">Carryover</div>
+        </div>
+        <div class="bar-label">
+          <span>← Immediate（instant effect）</span>
+          <span>Carryover（lagged effect）→</span>
+        </div>
+
+        <div class="formula-box" style="margin-top:1.2rem;">
+          Calculation Logic<br>
+          <code>x_imme[t] = x[t] × w[0]</code>（current-period instant effect, diagonal component）<br>
+          <code>x_carry[t] = x_decayed[t] − x_imme[t]</code>（accumulated past contributions）<br>
+          <code>sat_total = S(x_decayed)</code>、<code>sat_carry = S(x_carry | x_decayed)</code><br>
+          <code>sat_imme = sat_total − sat_carry</code><br>
+          <code>Immediate% = sum(sat_imme) / sum(sat_total)</code>
+        </div>
+      </div>
+
+      <!-- Right: time series chart of immediate + carryover -->
+      <div>
+        <div class="legend" style="margin-bottom:0.6rem; margin-top:0;">
+          <div class="legend-item"><div class="legend-line solid-imme"></div>Immediate（instant effect）</div>
+          <div class="legend-item"><div class="legend-line solid-carry"></div>Carryover（lagged effect）</div>
+        </div>
+        <canvas class="short" id="immeTsCanvas" role="img" aria-label="Immediate vs Carryover timeseries"></canvas>
+
+        <div class="decay-weight-section">
+          <div class="decay-weight-label">Adstock Decay Weight Vector（normalized w[1]〜w[windlen]）</div>
+          <canvas class="short" id="weightCanvas" role="img" aria-label="Decay weight vector"></canvas>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<div class="copyright">© Designed by T.Tsukazaki 2026</div>
+
+<script>
+(function() {
+
+  function dpr() { return window.devicePixelRatio || 1; }
+
+  function setupCanvas(canvas) {
+    const rect = canvas.getBoundingClientRect();
+    const d = dpr();
+    canvas.width = rect.width * d;
+    canvas.height = rect.height * d;
+    const ctx = canvas.getContext('2d');
+    ctx.scale(d, d);
+    return { ctx, w: rect.width, h: rect.height };
+  }
+
+  function drawAxes(ctx, w, h, pad, xLabel, yLabel, xMax, yMax, color) {
+    ctx.strokeStyle = '#2a2a3a';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(pad, pad * 0.5);
+    ctx.lineTo(pad, h - pad);
+    ctx.lineTo(w - pad * 0.5, h - pad);
+    ctx.stroke();
+
+    ctx.fillStyle = '#3a3850';
+    ctx.font = '10px "Helvetica Neue", sans-serif';
+    ctx.textAlign = 'center';
+
+    const xTicks = 5;
+    for (let i = 0; i <= xTicks; i++) {
+      const xv = (xMax / xTicks) * i;
+      const px = pad + (i / xTicks) * (w - pad * 1.5);
+      ctx.fillText(xv.toFixed(1), px, h - pad + 14);
+      ctx.strokeStyle = '#1e1e2a';
+      ctx.lineWidth = 0.5;
+      ctx.beginPath();
+      ctx.moveTo(px, pad * 0.5);
+      ctx.lineTo(px, h - pad);
+      ctx.stroke();
+    }
+
+    const yTicks = 4;
+    for (let i = 0; i <= yTicks; i++) {
+      const yv = (yMax / yTicks) * i;
+      const py = h - pad - (i / yTicks) * (h - pad * 1.5);
+      ctx.textAlign = 'right';
+      ctx.fillText(yv.toFixed(2), pad - 6, py + 3);
+      ctx.strokeStyle = '#1e1e2a';
+      ctx.lineWidth = 0.5;
+      ctx.beginPath();
+      ctx.moveTo(pad, py);
+      ctx.lineTo(w - pad * 0.5, py);
+      ctx.stroke();
+    }
+  }
+
+  function drawCurve(ctx, w, h, pad, points, color, xMax, yMax) {
+    const plotW = w - pad * 1.5;
+    const plotH = h - pad * 1.5;
+
+    ctx.beginPath();
+    ctx.lineWidth = 2.5;
+    ctx.strokeStyle = color;
+    ctx.lineJoin = 'round';
+    ctx.lineCap = 'round';
+
+    let first = true;
+    for (let i = 0; i < points.length; i++) {
+      const px = pad + (points[i][0] / xMax) * plotW;
+      const py = (h - pad) - (Math.min(points[i][1], yMax) / yMax) * plotH;
+      if (first) { ctx.moveTo(px, py); first = false; }
+      else ctx.lineTo(px, py);
+    }
+    ctx.stroke();
+
+    const grad = ctx.createLinearGradient(0, pad * 0.5, 0, h - pad);
+    const [r1, g1, b1] = color === '#a78bfa' ? [167,139,250] : [56,189,248];
+    grad.addColorStop(0, `rgba(${r1},${g1},${b1},0.25)`);
+    grad.addColorStop(1, `rgba(${r1},${g1},${b1},0)`);
+    ctx.beginPath();
+    for (let i = 0; i < points.length; i++) {
+      const px = pad + (points[i][0] / xMax) * plotW;
+      const py = (h - pad) - (Math.min(points[i][1], yMax) / yMax) * plotH;
+      if (i === 0) ctx.moveTo(px, py);
+      else ctx.lineTo(px, py);
+    }
+    ctx.lineTo(pad + (points[points.length-1][0] / xMax) * plotW, h - pad);
+    ctx.lineTo(pad, h - pad);
+    ctx.closePath();
+    ctx.fillStyle = grad;
+    ctx.fill();
+  }
+
+  function drawTimeSeriesAxes(ctx, w, h, pad, yMax, T) {
+    ctx.strokeStyle = '#2a2a3a';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(pad, pad * 0.5);
+    ctx.lineTo(pad, h - pad);
+    ctx.lineTo(w - pad * 0.5, h - pad);
+    ctx.stroke();
+
+    ctx.fillStyle = '#3a3850';
+    ctx.font = '10px "Helvetica Neue", sans-serif';
+    
+    ctx.textAlign = 'right';
+    ctx.fillText(yMax.toFixed(3), pad - 6, pad * 0.5 + 4);
+    ctx.fillText((yMax/2).toFixed(3), pad - 6, (h - pad)/2 + pad*0.25 + 4);
+    ctx.fillText("0", pad - 6, h - pad);
+
+    ctx.textAlign = 'center';
+    ctx.fillText("t=0", pad, h - pad + 14);
+    ctx.fillText("t=" + T, w - pad * 0.5, h - pad + 14);
+  }
+
+  function drawTimeSeriesCurve(ctx, w, h, pad, data, color, yMax, isDashed=false, fill=true) {
+    const plotW = w - pad * 1.5;
+    const plotH = h - pad * 1.5;
+    const T = data.length;
+    if (T < 2) return;
+
+    ctx.beginPath();
+    ctx.lineWidth = 2.5;
+    ctx.strokeStyle = color;
+    if(isDashed) {
+      ctx.setLineDash([4, 4]);
+      ctx.lineWidth = 1.5;
+    } else {
+      ctx.setLineDash([]);
+    }
+    ctx.lineJoin = 'round';
+    ctx.lineCap = 'round';
+
+    for (let i = 0; i < T; i++) {
+      const px = pad + (i / (T - 1)) * plotW;
+      const py = (h - pad) - (Math.max(0, Math.min(data[i], yMax)) / yMax) * plotH;
+      if (i === 0) ctx.moveTo(px, py);
+      else ctx.lineTo(px, py);
+    }
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    if (fill && !isDashed) {
+      const grad = ctx.createLinearGradient(0, pad * 0.5, 0, h - pad);
+      let r, g, b;
+      if (color === '#a78bfa') [r,g,b] = [167,139,250];
+      else if (color === '#38bdf8') [r,g,b] = [56,189,248];
+      else if (color === '#fbbf24') [r,g,b] = [251,191,36];
+      else if (color === '#f97316') [r,g,b] = [249,115,22];
+      else [r,g,b] = [90,88,112];
+
+      grad.addColorStop(0, `rgba(${r},${g},${b},0.2)`);
+      grad.addColorStop(1, `rgba(${r},${g},${b},0)`);
+
+      ctx.beginPath();
+      for (let i = 0; i < T; i++) {
+        const px = pad + (i / (T - 1)) * plotW;
+        const py = (h - pad) - (Math.max(0, Math.min(data[i], yMax)) / yMax) * plotH;
+        if (i === 0) ctx.moveTo(px, py);
+        else ctx.lineTo(px, py);
+      }
+      ctx.lineTo(pad + plotW, h - pad);
+      ctx.lineTo(pad, h - pad);
+      ctx.closePath();
+      ctx.fillStyle = grad;
+      ctx.fill();
+    }
+  }
+
+  // ==== 数学モデル関数 ====
+
+  // Weibull PDF (生の確率密度関数)
+  function weibullPDFraw(x, k, lambda) {
+    if (x <= 0 || k <= 0 || lambda <= 0) return 0;
+    return (k / lambda) * Math.pow(x / lambda, k - 1) * Math.exp(-Math.pow(x / lambda, k));
+  }
+
+  // Weibull CDF (累積分布関数) の生存関数: 1 - F(x) = exp(-(x/lambda)^k)
+  function weibullSurvival(x, k, lambda) {
+    if (x <= 0 || k <= 0 || lambda <= 0) return 1;
+    return Math.exp(-Math.pow(x / lambda, k));
+  }
+
+  // R の quantile(1:windlen, scale) に相当（type=7デフォルト）
+  // 1-indexed の整数列に対する線形補間分位数
+  function quantileSeq(windlen, p) {
+    const n = windlen;
+    const h = (n - 1) * p + 1; // 1-indexed
+    const lo = Math.floor(h);
+    const hi = Math.ceil(h);
+    if (lo === hi) return lo;
+    return Math.round(lo + (h - lo) * (hi - lo));
+  }
+
+  // Robyn仕様の正規化（min-max: (x - min) / (max - min)）
+  function normalizeRobyn(arr) {
+    const mn = Math.min(...arr);
+    const mx = Math.max(...arr);
+    if (mx - mn === 0) {
+      return arr.map((_, i) => i === 0 ? 1 : 0);
+    }
+    return arr.map(v => (v - mn) / (mx - mn));
+  }
+
+  // Robyn仕様 Weibull PDF Adstock の減衰重みベクターを計算
+  function computeWeibullWeights(shape, scale, windlen) {
+    if (windlen < 1) return [1];
+    if (shape === 0 || scale === 0) {
+      return Array.from({length: windlen}, (_, i) => i === 0 ? 1 : 0);
+    }
+    const scaleTrans = quantileSeq(windlen, scale);
+    const raw = [];
+    for (let l = 1; l <= windlen; l++) {
+      raw.push(weibullPDFraw(l, shape, scaleTrans));
+    }
+    return normalizeRobyn(raw);
+  }
+
+  // Weibull CDF（生存関数）Adstock の減衰重みベクターを計算
+  function computeWeibullCDFWeights(shape, scale, windlen) {
+    if (windlen < 1) return [1];
+    if (shape === 0 || scale === 0) {
+      return Array.from({length: windlen}, (_, i) => i === 0 ? 1 : 0);
+    }
+    const scaleTrans = quantileSeq(windlen, scale);
+    const raw = [];
+    for (let l = 1; l <= windlen; l++) {
+      // 1 - pweibull(l, shape, scaleTrans) = 生存関数
+      raw.push(weibullSurvival(l, shape, scaleTrans));
+    }
+    return normalizeRobyn(raw);
+  }
+
+  // Geometric Adstock の減衰重みベクターを計算
+  function computeGeometricWeights(theta, windlen) {
+    if (windlen < 1) return [1];
+    const raw = [];
+    for (let l = 0; l < windlen; l++) {
+      raw.push(Math.pow(theta, l));
+    }
+    return normalizeRobyn(raw);
+  }
+
+  // 選択された関数タイプに応じて重みを計算
+  function getAdstockWeights() {
+    const type = document.getElementById('adstockType').value;
+    const shape = parseFloat(document.getElementById('shape').value);
+    const scale = parseFloat(document.getElementById('scale').value);
+    const theta = parseFloat(document.getElementById('theta').value);
+    const windlen = parseInt(document.getElementById('lag').value);
+
+    if (type === 'geometric') {
+      return computeGeometricWeights(theta, windlen);
+    } else if (type === 'weibull_cdf') {
+      return computeWeibullCDFWeights(shape, scale, windlen);
+    } else {
+      return computeWeibullWeights(shape, scale, windlen);
+    }
+  }
+
+  // Robyn仕様 Weibull PDF Adstock の畳み込み計算
+  function applyAdstockWeibullPDF(x, weights) {
+    const T = x.length;
+    const windlen = weights.length;
+
+    const x_decayed = new Array(T).fill(0);
+    const x_imme = new Array(T).fill(0);
+
+    for (let t = 0; t < T; t++) {
+      let val = 0;
+      for (let l = 0; l < windlen; l++) {
+        if (t - l >= 0) {
+          val += x[t - l] * weights[l];
+        }
+      }
+      x_decayed[t] = val;
+      x_imme[t] = x[t] * weights[0];
+    }
+    return { x_decayed, x_imme };
+  }
+
+  // Robyn仕様 Hill Saturation
+  function saturationHill(x, alpha, gamma, x_marginal = null) {
+    const maxX = Math.max(...x);
+    const inflexion = maxX * gamma;
+    const inp = x_marginal !== null ? x_marginal : x;
+    return inp.map(v => {
+      const va = Math.pow(Math.max(0, v), alpha);
+      const ia = Math.pow(inflexion, alpha);
+      return ia === 0 && va === 0 ? 0 : va / (va + ia);
+    });
+  }
+
+  // ==== 時系列生成 ====
+  function generateBaseData(type, T) {
+    let data = [];
+    for (let t = 0; t < T; t++) {
+      let val = 0;
+      let normT = t / T;
+      switch (type) {
+        case '1': val = 0.5; break;
+        case '2': val = 0.1 + 0.8 * normT; break;
+        case '3': val = 0.9 - 0.8 * normT; break;
+        case '4': val = normT < 0.5 ? 0.1 + 1.6 * normT : 0.9 - 1.6 * (normT - 0.5); break;
+        case '5': val = normT < 0.5 ? 0.9 - 1.6 * normT : 0.1 + 1.6 * (normT - 0.5); break;
+        case '6': val = 0.5 + 0.3 * Math.sin(normT * Math.PI * 8); break;
+        case '7': val = 0.2 + 0.5 * normT + 0.2 * Math.sin(normT * Math.PI * 8); break;
+        case '8': val = 0.7 - 0.5 * normT + 0.2 * Math.sin(normT * Math.PI * 8); break;
+      }
+      data.push(Math.max(0, val));
+    }
+    return data;
+  }
+
+  // ==== Adstock関数タイプ切り替え ====
+  function updateAdstockControlVisibility() {
+    const type = document.getElementById('adstockType').value;
+    const isGeo = type === 'geometric';
+    document.getElementById('thetaControl').style.display  = isGeo ? '' : 'none';
+    document.getElementById('shapeControl').style.display  = isGeo ? 'none' : '';
+    document.getElementById('scaleControl').style.display  = isGeo ? 'none' : '';
+  }
+
+  function updateAdstockFormulaBox() {
+    const type = document.getElementById('adstockType').value;
+    const box = document.getElementById('adstockFormulaBox');
+    if (type === 'geometric') {
+      box.innerHTML = 'Geometric Adstock<br>' +
+        '<code>w(l) = normalize( θ^(l−1) )</code> for l = 1..windlen<br>' +
+        '<code>normalize: (x − min) / (max − min)</code>（min-max normalization to 0〜1）<br>' +
+        '<code>x_decayed[t] = Σ_{l=0}^{windlen-1} x[t-l] * w[l]</code>（matrix convolution）';
+    } else if (type === 'weibull_pdf') {
+      box.innerHTML = 'Weibull Adstock (PDF)<br>' +
+        '<code>scaleTrans = quantile(1:windlen, scale)</code>（convert to actual lag position）<br>' +
+        '<code>w(l) = normalize( dweibull(l, shape, scaleTrans) )</code> for l = 1..windlen<br>' +
+        '<code>normalize: (x − min) / (max − min)</code>（min-max normalization to 0〜1）<br>' +
+        '<code>x_decayed[t] = Σ_{l=0}^{windlen-1} x[t-l] * w[l]</code>（matrix convolution）';
+    } else {
+      box.innerHTML = 'Weibull Adstock (CDF / Survival Function)<br>' +
+        '<code>scaleTrans = quantile(1:windlen, scale)</code>（convert to actual lag position）<br>' +
+        '<code>w(l) = normalize( 1 − pweibull(l, shape, scaleTrans) )</code> for l = 1..windlen<br>' +
+        '<code>normalize: (x − min) / (max − min)</code>（min-max normalization to 0〜1）<br>' +
+        '<code>x_decayed[t] = Σ_{l=0}^{windlen-1} x[t-l] * w[l]</code>（matrix convolution）';
+    }
+  }
+
+  // ==== レンダリング ====
+
+  function renderAdstock() {
+    const canvas = document.getElementById('adstockCanvas');
+    const { ctx, w, h } = setupCanvas(canvas);
+    ctx.clearRect(0, 0, w, h);
+
+    const windlen = parseInt(document.getElementById('lag').value);
+    const pad = 38;
+
+    const weights = getAdstockWeights();
+
+    const xMax = windlen;
+    const yMax = 1.1;
+
+    ctx.strokeStyle = '#2a2a3a';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(pad, pad * 0.5);
+    ctx.lineTo(pad, h - pad);
+    ctx.lineTo(w - pad * 0.5, h - pad);
+    ctx.stroke();
+
+    ctx.fillStyle = '#3a3850';
+    ctx.font = '10px "Helvetica Neue", sans-serif';
+    ctx.textAlign = 'center';
+
+    const xTicks = Math.min(windlen, 6);
+    for (let i = 0; i <= xTicks; i++) {
+      const xv = Math.round((windlen / xTicks) * i);
+      const px = pad + (xv / xMax) * (w - pad * 1.5);
+      ctx.fillText(xv, px, h - pad + 14);
+      ctx.strokeStyle = '#1e1e2a';
+      ctx.lineWidth = 0.5;
+      ctx.beginPath();
+      ctx.moveTo(px, pad * 0.5);
+      ctx.lineTo(px, h - pad);
+      ctx.stroke();
+    }
+    const yTicks = 4;
+    for (let i = 0; i <= yTicks; i++) {
+      const yv = (1.0 / yTicks) * i;
+      const py = h - pad - (yv / yMax) * (h - pad * 1.5);
+      ctx.textAlign = 'right';
+      ctx.fillText(yv.toFixed(2), pad - 6, py + 3);
+      ctx.strokeStyle = '#1e1e2a';
+      ctx.lineWidth = 0.5;
+      ctx.beginPath();
+      ctx.moveTo(pad, py);
+      ctx.lineTo(w - pad * 0.5, py);
+      ctx.stroke();
+    }
+
+    const barW = Math.max(1, (w - pad * 1.5) / windlen - 1);
+    const plotH = h - pad * 1.5;
+
+    for (let i = 0; i < weights.length; i++) {
+      const bx = pad + (i / xMax) * (w - pad * 1.5);
+      const bh = (weights[i] / yMax) * plotH;
+      const by = h - pad - bh;
+
+      const grad = ctx.createLinearGradient(0, by, 0, h - pad);
+      grad.addColorStop(0, 'rgba(167,139,250,0.9)');
+      grad.addColorStop(1, 'rgba(108,99,224,0.3)');
+      ctx.fillStyle = grad;
+      ctx.fillRect(bx, by, barW, bh);
+    }
+
+    const peakIdx = weights.indexOf(Math.max(...weights));
+    const peakX = pad + (peakIdx / xMax) * (w - pad * 1.5) + barW / 2;
+    const peakY = (h - pad) - (weights[peakIdx] / yMax) * plotH;
+    ctx.beginPath();
+    ctx.arc(peakX, peakY, 4, 0, Math.PI * 2);
+    ctx.fillStyle = '#a78bfa';
+    ctx.fill();
+    ctx.strokeStyle = '#16161f';
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+  }
+
+  function renderSaturation() {
+    const canvas = document.getElementById('satCanvas');
+    const { ctx, w, h } = setupCanvas(canvas);
+    ctx.clearRect(0, 0, w, h);
+
+    const alpha = parseFloat(document.getElementById('alpha').value);
+    const gamma = parseFloat(document.getElementById('gamma').value);
+    const pad = 38;
+    const xMax = 2;
+    const yMax = 1.1;
+    const N = 400;
+
+    const inflexion = xMax * gamma;
+
+    const pts = [];
+    for (let i = 1; i <= N; i++) {
+      const x = (i / N) * xMax;
+      const xa = Math.pow(x, alpha);
+      const ia = Math.pow(inflexion, alpha);
+      const y = (xa + ia) === 0 ? 0 : xa / (xa + ia);
+      pts.push([x, y]);
+    }
+
+    drawAxes(ctx, w, h, pad, 'x', 'S(x)', xMax, yMax, '#38bdf8');
+    drawCurve(ctx, w, h, pad, pts, '#38bdf8', xMax, yMax);
+
+    if (inflexion > 0 && inflexion < xMax) {
+      const plotW = w - pad * 1.5;
+      const plotH = h - pad * 1.5;
+      const gx = pad + (inflexion / xMax) * plotW;
+      const gy = (h - pad) - (0.5 / yMax) * plotH;
+
+      ctx.setLineDash([4, 3]);
+      ctx.strokeStyle = 'rgba(56,189,248,0.35)';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(gx, h - pad);
+      ctx.lineTo(gx, gy);
+      ctx.moveTo(pad, gy);
+      ctx.lineTo(gx, gy);
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      ctx.beginPath();
+      ctx.arc(gx, gy, 4, 0, Math.PI * 2);
+      ctx.fillStyle = '#38bdf8';
+      ctx.fill();
+      ctx.strokeStyle = '#16161f';
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+
+      ctx.fillStyle = 'rgba(56,189,248,0.7)';
+      ctx.font = '10px monospace';
+      ctx.textAlign = 'left';
+      ctx.fillText('inflexion=' + inflexion.toFixed(2), gx + 6, gy - 4);
+    }
+  }
+
+  let gAdstocked = null;
+  let gImme = null;
+  let gCarry = null;
+  let gSatTotal = null;
+  let gSatImme = null;
+  let gSatCarry = null;
+
+  function computeAll() {
+    const type = document.getElementById('dataType').value;
+    const T = 300;
+    const baseData = generateBaseData(type, T);
+
+    const alpha = parseFloat(document.getElementById('alpha').value);
+    const gamma = parseFloat(document.getElementById('gamma').value);
+
+    const weights = getAdstockWeights();
+
+    const { x_decayed, x_imme } = applyAdstockWeibullPDF(baseData, weights);
+    const x_carry = x_decayed.map((v, i) => Math.max(0, v - x_imme[i]));
+
+    gAdstocked = x_decayed;
+    gImme = x_imme;
+    gCarry = x_carry;
+
+    gSatTotal = saturationHill(x_decayed, alpha, gamma);
+    gSatCarry = saturationHill(x_decayed, alpha, gamma, x_carry);
+    gSatImme  = gSatTotal.map((v, i) => Math.max(0, v - gSatCarry[i]));
+
+    const sumBase = baseData.reduce((a, b) => a + b, 0);
+    const sumDecayed = x_decayed.reduce((a, b) => a + b, 0);
+    const inflationTotal = sumBase > 0 ? sumDecayed / sumBase : 1;
+
+    return { baseData, x_decayed, x_imme, x_carry, weights, inflationTotal };
+  }
+
+  function renderTimeSeries() {
+    const { baseData, x_decayed, x_imme, x_carry, weights, inflationTotal } = computeAll();
+    const T = baseData.length;
+    const pad = 38;
+
+    const adCanvas = document.getElementById('adstockTsCanvas');
+    const adSetup = setupCanvas(adCanvas);
+    adSetup.ctx.clearRect(0, 0, adSetup.w, adSetup.h);
+    const adMaxY = Math.max(...x_decayed, ...baseData) * 1.1 || 1;
+    drawTimeSeriesAxes(adSetup.ctx, adSetup.w, adSetup.h, pad, adMaxY, T);
+    drawTimeSeriesCurve(adSetup.ctx, adSetup.w, adSetup.h, pad, baseData, '#5a5870', adMaxY, true, false);
+    drawTimeSeriesCurve(adSetup.ctx, adSetup.w, adSetup.h, pad, x_decayed, '#a78bfa', adMaxY, false, true);
+
+    const satCanvas = document.getElementById('satTsCanvas');
+    const satSetup = setupCanvas(satCanvas);
+    satSetup.ctx.clearRect(0, 0, satSetup.w, satSetup.h);
+    const satMaxY = Math.max(...x_decayed, ...gSatTotal) * 1.1 || 1;
+    drawTimeSeriesAxes(satSetup.ctx, satSetup.w, satSetup.h, pad, satMaxY, T);
+    drawTimeSeriesCurve(satSetup.ctx, satSetup.w, satSetup.h, pad, x_decayed, '#5a5870', satMaxY, true, false);
+    drawTimeSeriesCurve(satSetup.ctx, satSetup.w, satSetup.h, pad, gSatTotal, '#38bdf8', satMaxY, false, true);
+
+    const sumSatTotal = gSatTotal.reduce((a, b) => a + b, 0);
+    const sumSatImme  = gSatImme.reduce((a, b) => a + b, 0);
+    const sumSatCarry = gSatCarry.reduce((a, b) => a + b, 0);
+
+    const immeRatio = sumSatTotal > 0 ? sumSatImme / sumSatTotal : 0;
+    const carryRatio = sumSatTotal > 0 ? sumSatCarry / sumSatTotal : 0;
+
+    document.getElementById('immeRatio').textContent  = (immeRatio * 100).toFixed(1) + '%';
+    document.getElementById('carryRatio').textContent = (carryRatio * 100).toFixed(1) + '%';
+    document.getElementById('inflationRatio').textContent = inflationTotal.toFixed(2) + 'x';
+
+    const immePct = (immeRatio * 100).toFixed(1);
+    const carryPct = (carryRatio * 100).toFixed(1);
+    document.getElementById('barImme').style.width  = (immeRatio * 100) + '%';
+    document.getElementById('barCarry').style.width = (carryRatio * 100) + '%';
+    document.getElementById('barImme').textContent  = immePct + '%';
+    document.getElementById('barCarry').textContent = carryPct + '%';
+
+    const immeCanvas = document.getElementById('immeTsCanvas');
+    const immeSetup = setupCanvas(immeCanvas);
+    immeSetup.ctx.clearRect(0, 0, immeSetup.w, immeSetup.h);
+    const immeMaxY = Math.max(...gSatImme, ...gSatCarry) * 1.1 || 1;
+    drawTimeSeriesAxes(immeSetup.ctx, immeSetup.w, immeSetup.h, pad, immeMaxY, T);
+    drawTimeSeriesCurve(immeSetup.ctx, immeSetup.w, immeSetup.h, pad, gSatCarry, '#f97316', immeMaxY, false, true);
+    drawTimeSeriesCurve(immeSetup.ctx, immeSetup.w, immeSetup.h, pad, gSatImme, '#fbbf24', immeMaxY, false, false);
+
+    renderWeightChart(weights);
+  }
+
+  function renderWeightChart(weights) {
+    const canvas = document.getElementById('weightCanvas');
+    const { ctx, w, h } = setupCanvas(canvas);
+    ctx.clearRect(0, 0, w, h);
+
+    const pad = 38;
+    const windlen = weights.length;
+    const xMax = windlen;
+    const yMax = 1.05;
+    const plotH = h - pad * 1.5;
+    const plotW = w - pad * 1.5;
+
+    ctx.strokeStyle = '#2a2a3a';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(pad, pad * 0.5);
+    ctx.lineTo(pad, h - pad);
+    ctx.lineTo(w - pad * 0.5, h - pad);
+    ctx.stroke();
+
+    ctx.fillStyle = '#3a3850';
+    ctx.font = '9px "Helvetica Neue", sans-serif';
+
+    ctx.textAlign = 'right';
+    ctx.fillText('1.0', pad - 5, pad * 0.5 + 4);
+    ctx.fillText('0.5', pad - 5, (h - pad)/2 + pad*0.25 + 4);
+    ctx.fillText('0', pad - 5, h - pad);
+
+    const xTicks = Math.min(windlen, 6);
+    ctx.textAlign = 'center';
+    for (let i = 0; i <= xTicks; i++) {
+      const xv = Math.round((windlen / xTicks) * i);
+      const px = pad + (xv / xMax) * plotW;
+      ctx.fillText(xv, px, h - pad + 12);
+    }
+
+    const barW = Math.max(1, plotW / windlen - 0.5);
+    for (let i = 0; i < weights.length; i++) {
+      const bx = pad + (i / xMax) * plotW;
+      const bh = (weights[i] / yMax) * plotH;
+      const by = h - pad - bh;
+      const grad = ctx.createLinearGradient(0, by, 0, h - pad);
+      grad.addColorStop(0, 'rgba(251,191,36,0.85)');
+      grad.addColorStop(1, 'rgba(217,119,6,0.3)');
+      ctx.fillStyle = grad;
+      ctx.fillRect(bx, by, barW, bh);
+    }
+
+    if (weights.length > 0) {
+      const peakIdx = weights.indexOf(Math.max(...weights));
+      const peakX = pad + (peakIdx / xMax) * plotW + barW / 2;
+      const peakY = (h - pad) - (weights[peakIdx] / yMax) * plotH;
+      ctx.beginPath();
+      ctx.arc(peakX, peakY, 3.5, 0, Math.PI * 2);
+      ctx.fillStyle = '#fbbf24';
+      ctx.fill();
+      ctx.strokeStyle = '#16161f';
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+
+      ctx.fillStyle = 'rgba(251,191,36,0.7)';
+      ctx.font = '9px monospace';
+      ctx.textAlign = peakIdx < windlen / 2 ? 'left' : 'right';
+      const labelX = peakX + (peakIdx < windlen / 2 ? 5 : -5);
+      ctx.fillText('peak: lag ' + (peakIdx + 1), labelX, peakY - 5);
+    }
+  }
+
+  function updateSliderFill(inputId, fillId, min, max) {
+    const inp = document.getElementById(inputId);
+    const fill = document.getElementById(fillId);
+    const pct = ((inp.value - min) / (max - min)) * 100;
+    fill.style.width = pct + '%';
+  }
+
+  function init() {
+    const adstockSliders = [
+      { id: 'theta', fillId: 'thetaFill', valId: 'thetaVal', min: 0.01, max: 0.99 },
+      { id: 'shape', fillId: 'shapeFill', valId: 'shapeVal', min: 0.01, max: 8 },
+      { id: 'scale', fillId: 'scaleFill', valId: 'scaleVal', min: 0.01, max: 1 },
+      { id: 'lag',   fillId: 'lagFill',   valId: 'lagVal',   min: 1,    max: 120 },
+    ];
+    const satSliders = [
+      { id: 'alpha', fillId: 'alphaFill', valId: 'alphaVal', min: 0.01, max: 2 },
+      { id: 'gamma', fillId: 'gammaFill', valId: 'gammaVal', min: 0.01, max: 1.5 },
+    ];
+
+    adstockSliders.forEach(s => {
+      updateSliderFill(s.id, s.fillId, s.min, s.max);
+      document.getElementById(s.id).addEventListener('input', function() {
+        if (s.id === 'lag') {
+          document.getElementById(s.valId).textContent = parseInt(this.value);
+        } else {
+          document.getElementById(s.valId).textContent = parseFloat(this.value).toFixed(2);
+        }
+        updateSliderFill(s.id, s.fillId, s.min, s.max);
+        renderAdstock();
+        renderTimeSeries();
+      });
+    });
+
+    satSliders.forEach(s => {
+      updateSliderFill(s.id, s.fillId, s.min, s.max);
+      document.getElementById(s.id).addEventListener('input', function() {
+        document.getElementById(s.valId).textContent = parseFloat(this.value).toFixed(2);
+        updateSliderFill(s.id, s.fillId, s.min, s.max);
+        renderSaturation();
+        renderTimeSeries();
+      });
+    });
+
+    document.getElementById('adstockType').addEventListener('change', function() {
+      updateAdstockControlVisibility();
+      updateAdstockFormulaBox();
+      renderAdstock();
+      renderTimeSeries();
+    });
+
+    document.getElementById('dataType').addEventListener('change', renderTimeSeries);
+
+    updateAdstockControlVisibility();
+    updateAdstockFormulaBox();
+    renderAdstock();
+    renderSaturation();
+    renderTimeSeries();
+
+    window.addEventListener('resize', () => {
+      renderAdstock();
+      renderSaturation();
+      renderTimeSeries();
+    });
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', init);
+  } else {
+    init();
+  }
+
+})();
+</script>
+</body>
+</html>
