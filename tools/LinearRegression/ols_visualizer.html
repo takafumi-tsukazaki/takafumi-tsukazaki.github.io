@@ -1,0 +1,949 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Linear Regression Geometry & Collinearity Diagnostics</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'Helvetica Neue', 'Hiragino Sans', 'Hiragino Kaku Gothic ProN', 'Yu Gothic', sans-serif;
+    background: #0d0d14;
+    color: #e8e6f0;
+    min-height: 100vh;
+    padding: 2rem;
+  }
+
+  h1 {
+    font-size: 1.1rem;
+    font-weight: 400;
+    color: #9b96c0;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    margin-bottom: 0.25rem;
+  }
+  h2 {
+    font-size: 2rem;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    margin-bottom: 0.4rem;
+  }
+  .title-disclaimer {
+    font-size: 0.72rem;
+    color: #5a5870;
+    margin-bottom: 1.5rem;
+    line-height: 1.6;
+  }
+
+  .data-selector {
+    background: #16161f;
+    border: 1px solid #2a2a3a;
+    border-radius: 12px;
+    padding: 1.25rem 1.5rem;
+    margin-bottom: 1.5rem;
+    display: flex;
+    align-items: flex-start;
+    gap: 2.5rem;
+    flex-wrap: wrap;
+  }
+  .cb-item { display: flex; flex-direction: column; gap: 0.45rem; min-width: 260px; flex: 1; }
+  .cb-head { display: flex; justify-content: space-between; align-items: baseline; gap: 1rem; }
+  .cb-item label {
+    font-size: 0.8rem;
+    letter-spacing: 0.05em;
+    color: #9b96c0;
+    font-weight: 500;
+  }
+  .cb-val { color: #fbbf24; }
+  .cb-ends { display: flex; justify-content: space-between; font-size: 0.68rem; color: #3a3850; margin-top: 2px; }
+
+  .grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1.5rem;
+    margin-bottom: 1.5rem;
+  }
+
+  .panel {
+    background: #16161f;
+    border: 1px solid #2a2a3a;
+    border-radius: 16px;
+    padding: 1.75rem;
+    position: relative;
+    overflow: hidden;
+    margin-bottom: 1.5rem;
+  }
+  .panel::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 2px;
+    border-radius: 16px 16px 0 0;
+  }
+  .panel.projection::before { background: linear-gradient(90deg, #6c63e0, #a78bfa); }
+  .panel.ellipse::before    { background: linear-gradient(90deg, #0ea5e9, #38bdf8); }
+  .panel.svd::before        { background: linear-gradient(90deg, #d97706, #fbbf24); }
+
+  .panel-title {
+    font-size: 1.3rem;
+    font-weight: 700;
+    margin-bottom: 0.25rem;
+    letter-spacing: -0.01em;
+  }
+  .panel.projection .panel-title { color: #a78bfa; }
+  .panel.ellipse .panel-title    { color: #38bdf8; }
+  .panel.svd .panel-title        { color: #fbbf24; }
+
+  .panel-subtitle {
+    font-size: 0.8rem;
+    color: #5a5870;
+    margin-bottom: 1.5rem;
+    letter-spacing: 0.05em;
+  }
+
+  .legend {
+    display: flex;
+    gap: 1.2rem;
+    font-size: 0.75rem;
+    color: #6a677a;
+    margin-bottom: 1rem;
+    margin-top: -0.5rem;
+    flex-wrap: wrap;
+  }
+  .legend-item { display: flex; align-items: center; gap: 0.5rem; }
+  .legend-line { width: 20px; height: 2px; }
+  .legend-line.solid-x  { background: #5a5870; }
+  .legend-line.solid-yh { background: #a78bfa; }
+  .legend-line.solid-y  { background: #e8e6f0; }
+  .legend-line.solid-e  { background: #f97316; }
+
+  canvas {
+    width: 100%;
+    height: 220px;
+    display: block;
+    border-radius: 8px;
+    background: #0d0d14;
+    margin-bottom: 1.5rem;
+  }
+  canvas.tall  { height: 340px; cursor: grab; }
+  canvas.tall:active { cursor: grabbing; }
+  canvas.med   { height: 240px; }
+  canvas.short { height: 200px; }
+
+  .controls { display: flex; flex-direction: column; gap: 1.2rem; }
+  .control-row { display: flex; flex-direction: column; gap: 0.4rem; }
+  .control-header { display: flex; justify-content: space-between; align-items: baseline; }
+
+  .param-name {
+    font-size: 0.8rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: #6a677a;
+    font-weight: 500;
+  }
+  .param-value {
+    font-size: 1rem;
+    font-weight: 700;
+    font-family: 'Courier New', monospace;
+  }
+  .panel.projection .param-value { color: #a78bfa; }
+  .panel.ellipse .param-value    { color: #38bdf8; }
+  .panel.svd .param-value        { color: #fbbf24; }
+
+  /* 数式ラベルは大文字変換しない（β が Β=「B」に化けるのを防ぐ） */
+  .math-label { text-transform: none; letter-spacing: 0.02em; }
+
+  .slider-wrap {
+    position: relative;
+    height: 4px;
+    background: #2a2a3a;
+    border-radius: 2px;
+    margin: 8px 0;
+  }
+  .slider-fill {
+    position: absolute;
+    left: 0; top: 0; bottom: 0;
+    border-radius: 2px;
+    pointer-events: none;
+    background: linear-gradient(90deg, #6c63e0, #a78bfa);
+  }
+  .panel.ellipse .slider-fill { background: linear-gradient(90deg, #0ea5e9, #38bdf8); }
+  .data-selector .slider-fill { background: linear-gradient(90deg, #d97706, #fbbf24); }
+
+  input[type=range] {
+    -webkit-appearance: none;
+    appearance: none;
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    left: 0; right: 0;
+    width: 100%;
+    height: 4px;
+    background: transparent;
+    cursor: pointer;
+    margin: 0;
+  }
+  input[type=range]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 18px; height: 18px;
+    border-radius: 50%;
+    background: #e8e6f0;
+    border: 2px solid #2a2a3a;
+    box-shadow: 0 0 0 3px rgba(167,139,250,0.2);
+    cursor: pointer;
+    transition: box-shadow 0.15s;
+  }
+  input[type=range]:hover::-webkit-slider-thumb { box-shadow: 0 0 0 5px rgba(167,139,250,0.3); }
+
+  .formula-box {
+    margin-top: 1.5rem;
+    padding: 0.9rem 1.1rem;
+    background: #0d0d14;
+    border: 1px solid #2a2a3a;
+    border-radius: 8px;
+    font-size: 0.78rem;
+    color: #5a5870;
+    line-height: 1.7;
+  }
+  .formula-box code { font-family: 'Courier New', monospace; font-size: 0.82rem; }
+  .panel.projection .formula-box code { color: #a78bfa; }
+  .panel.ellipse .formula-box code    { color: #38bdf8; }
+  .panel.svd .formula-box code        { color: #fbbf24; }
+
+  .stat-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 0.6rem 1.5rem;
+    margin-top: 0.5rem;
+  }
+  .stat-row { display: flex; justify-content: space-between; align-items: baseline; }
+
+  .ratio-display { display: flex; gap: 1rem; margin-bottom: 1.2rem; flex-wrap: wrap; }
+  .ratio-card {
+    background: #0d0d14;
+    border: 1px solid #2a2a3a;
+    border-radius: 10px;
+    padding: 0.9rem 1.2rem;
+    min-width: 110px;
+    text-align: center;
+    flex: 1;
+  }
+  .ratio-card-label {
+    font-size: 0.7rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: #5a5870;
+    margin-bottom: 0.4rem;
+  }
+  .ratio-card-value { font-size: 1.6rem; font-weight: 700; font-family: 'Courier New', monospace; color: #fbbf24; }
+
+  .svd-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; }
+
+  .nullspace-box {
+    margin-top: 1rem;
+    padding: 0.9rem 1.1rem;
+    background: #0d0d14;
+    border: 1px solid #2a2a3a;
+    border-radius: 8px;
+    font-size: 0.78rem;
+    color: #6a677a;
+    line-height: 1.6;
+  }
+  .nullspace-box .vec { font-family: 'Courier New', monospace; font-size: 0.95rem; margin-top: 0.4rem; }
+  .vec .big { color: #f97316; font-weight: 700; }
+  .vec .small { color: #3a3850; }
+
+  @media (max-width: 900px) {
+    .grid { grid-template-columns: 1fr; }
+    .svd-grid { grid-template-columns: 1fr; }
+    h2 { font-size: 1.5rem; }
+    .cb-item { min-width: 100%; }
+  }
+
+  .copyright {
+    position: fixed;
+    bottom: 10px;
+    right: 14px;
+    font-size: 0.65rem;
+    color: #3a3850;
+    letter-spacing: 0.04em;
+    pointer-events: none;
+    user-select: none;
+  }
+</style>
+</head>
+<body>
+
+<h1>Advanced Analytics Dashboard</h1>
+<h2>Linear Regression: Geometry &amp; Collinearity Diagnostics</h2>
+<p class="title-disclaimer">Geometric interpretation of OLS as orthogonal projection, and a micro-anatomy of multicollinearity through VIF, Singular Value Decomposition (SVD), and the parameter uncertainty ellipse. The ρ(x₁,x₂) slider is linked to the projection angle (corr = cos∠), and the two control bars are mirrored — move either one.</p>
+
+<!-- ============ Top control bar ============ -->
+<div class="data-selector" id="bar-top">
+  <div class="cb-item">
+    <div class="cb-head"><label>Multicollinearity ρ(x₁, x₂)</label><span class="param-value cb-val" id="val_rho12a">0.00</span></div>
+    <div class="slider-wrap"><div class="slider-fill" id="fill_rho12a"></div>
+      <input type="range" id="rho12a" min="0" max="0.99" step="0.01" value="0"></div>
+    <div class="cb-ends"><span>0 (independent)</span><span>→ 1 (collinear)</span></div>
+  </div>
+  <div class="cb-item">
+    <div class="cb-head"><label>Collinearity ρ(x₃, x₁/x₂)</label><span class="param-value cb-val" id="val_rho3a">0.00</span></div>
+    <div class="slider-wrap"><div class="slider-fill" id="fill_rho3a"></div>
+      <input type="range" id="rho3a" min="0" max="0.99" step="0.01" value="0"></div>
+    <div class="cb-ends"><span>0</span><span id="rho3max_a">max ≈ 0.71</span></div>
+  </div>
+</div>
+
+<div class="grid">
+
+  <!-- ============ Panel A: Orthogonal Projection ============ -->
+  <div class="panel projection">
+    <div class="panel-title">Orthogonal Projection (OLS)</div>
+    <div class="panel-subtitle">y projected onto the column space C(X) = span(x₁, x₂) — drag to rotate · angle linked to ρ(x₁,x₂)</div>
+
+    <div class="legend">
+      <div class="legend-item"><div class="legend-line solid-x"></div>x₁, x₂ (basis)</div>
+      <div class="legend-item"><div class="legend-line solid-y"></div>y</div>
+      <div class="legend-item"><div class="legend-line solid-yh"></div>ŷ (fit)</div>
+      <div class="legend-item"><div class="legend-line solid-e"></div>e = y − ŷ ⊥ C(X)</div>
+    </div>
+
+    <canvas id="projCanvas" class="tall" role="img" aria-label="3D orthogonal projection"></canvas>
+
+    <div class="controls">
+      <div class="control-row">
+        <div class="control-header">
+          <span class="param-name">Angle ∠(x₁, x₂) ⇄ ρ(x₁,x₂)</span>
+          <span class="param-value" id="angleVal">90°</span>
+        </div>
+        <div class="slider-wrap">
+          <div class="slider-fill" id="angleFill"></div>
+          <input type="range" id="angle" min="5" max="90" step="0.1" value="90">
+        </div>
+        <div class="cb-ends"><span>5° (collinear)</span><span>90° (orthogonal)</span></div>
+      </div>
+      <div class="control-row">
+        <div class="control-header">
+          <span class="param-name math-label">Residual height ‖e‖ → σ (error scale)</span>
+          <span class="param-value" id="heightVal">3.0</span>
+        </div>
+        <div class="slider-wrap">
+          <div class="slider-fill" id="heightFill"></div>
+          <input type="range" id="height" min="0" max="6" step="0.1" value="3">
+        </div>
+        <div class="cb-ends"><span>0 (perfect fit)</span><span>scales the uncertainty ellipse →</span></div>
+      </div>
+    </div>
+
+    <div class="stat-grid">
+      <div class="stat-row"><span class="param-name math-label">β₁</span><span class="param-value" id="beta1Val">—</span></div>
+      <div class="stat-row"><span class="param-name math-label">β₂</span><span class="param-value" id="beta2Val">—</span></div>
+      <div class="stat-row"><span class="param-name math-label">corr = cos∠</span><span class="param-value" id="cosVal">—</span></div>
+      <div class="stat-row"><span class="param-name math-label">R²</span><span class="param-value" id="r2Val">—</span></div>
+    </div>
+
+    <div class="formula-box">
+      OLS as projection<br>
+      <code>ŷ = X(XᵀX)⁻¹Xᵀy</code> — orthogonal projection of y onto C(X)<br>
+      <code>e = y − ŷ ⊥ C(X)</code>（the normal equations Xᵀe = 0）<br>
+      <code>corr(x₁,x₂) = cos∠(x₁,x₂)</code> ← the angle slider and ρ(x₁,x₂) are one and the same<br>
+      <span style="font-size:0.72rem;">As ∠→0 the coefficients β₁,β₂ explode, yet ŷ and R² are unchanged — collinearity destroys coefficient stability, not fit.</span>
+    </div>
+  </div>
+
+  <!-- ============ Panel B: Parameter Uncertainty Ellipse ============ -->
+  <div class="panel ellipse">
+    <div class="panel-title">Parameter Uncertainty Ellipse</div>
+    <div class="panel-subtitle">Confidence region of (β̂₁, β̂₂) — driven by ρ and scaled by σ from ‖e‖</div>
+
+    <canvas id="ellipseCanvas" class="med" role="img" aria-label="Parameter covariance ellipse"></canvas>
+
+    <div class="stat-grid">
+      <div class="stat-row"><span class="param-name math-label">SE(β̂₁) = σ·√VIF₁</span><span class="param-value" id="sdB1Val">—</span></div>
+      <div class="stat-row"><span class="param-name math-label">SE(β̂₂) = σ·√VIF₂</span><span class="param-value" id="sdB2Val">—</span></div>
+      <div class="stat-row"><span class="param-name math-label">σ (error scale)</span><span class="param-value" id="sigmaVal">—</span></div>
+      <div class="stat-row"><span class="param-name math-label">axis ratio</span><span class="param-value" id="axisRatioVal">—</span></div>
+    </div>
+
+    <div class="formula-box">
+      Covariance ellipse<br>
+      <code>Cov(β̂) = σ²(XᵀX)⁻¹ ∝ σ²·R⁻¹</code><br>
+      <code>axes = eigenvectors,  half-length ∝ σ / √λᵢ(XᵀX)</code><br>
+      <span style="font-size:0.72rem;">Shape (axis ratio) depends on X only; overall size scales with σ from ‖e‖. As the smallest λ→0 the ellipse stretches to infinity along the null direction (β₁↑ / β₂↓).</span>
+    </div>
+  </div>
+
+</div>
+
+<!-- ============ Mirror control bar (between Panel B and Panel C) ============ -->
+<div class="data-selector" id="bar-mid">
+  <div class="cb-item">
+    <div class="cb-head"><label>Multicollinearity ρ(x₁, x₂)</label><span class="param-value cb-val" id="val_rho12b">0.00</span></div>
+    <div class="slider-wrap"><div class="slider-fill" id="fill_rho12b"></div>
+      <input type="range" id="rho12b" min="0" max="0.99" step="0.01" value="0"></div>
+    <div class="cb-ends"><span>0 (independent)</span><span>→ 1 (collinear)</span></div>
+  </div>
+  <div class="cb-item">
+    <div class="cb-head"><label>Collinearity ρ(x₃, x₁/x₂)</label><span class="param-value cb-val" id="val_rho3b">0.00</span></div>
+    <div class="slider-wrap"><div class="slider-fill" id="fill_rho3b"></div>
+      <input type="range" id="rho3b" min="0" max="0.99" step="0.01" value="0"></div>
+    <div class="cb-ends"><span>0</span><span id="rho3max_b">max ≈ 0.71</span></div>
+  </div>
+</div>
+
+<!-- ============ Panel C: Multicollinearity Micro-Anatomy ============ -->
+<div class="panel svd">
+  <div class="panel-title">Multicollinearity Micro-Anatomy: Correlation &amp; SVD</div>
+  <div class="panel-subtitle">Correlation matrix, singular values of X / eigenvalues of XᵀX, condition number κ, and VIF — these depend on X only (independent of σ)</div>
+
+  <div class="ratio-display">
+    <div class="ratio-card">
+      <div class="ratio-card-label">VIF(x₁)</div>
+      <div class="ratio-card-value" id="vif1Val">—</div>
+    </div>
+    <div class="ratio-card">
+      <div class="ratio-card-label">VIF(x₂)</div>
+      <div class="ratio-card-value" id="vif2Val">—</div>
+    </div>
+    <div class="ratio-card">
+      <div class="ratio-card-label">VIF(x₃)</div>
+      <div class="ratio-card-value" id="vif3Val">—</div>
+    </div>
+    <div class="ratio-card">
+      <div class="ratio-card-label">Condition κ</div>
+      <div class="ratio-card-value" id="kappaVal">—</div>
+    </div>
+  </div>
+
+  <div class="svd-grid">
+    <div>
+      <div class="param-name" style="margin-bottom:0.6rem;">Correlation matrix R (heatmap)</div>
+      <canvas id="corrCanvas" class="short" role="img" aria-label="Correlation matrix heatmap"></canvas>
+
+      <div class="nullspace-box">
+        Near-null direction — eigenvector of the smallest singular value σ_min (which variables cancel):
+        <div class="vec" id="nullVec">—</div>
+      </div>
+    </div>
+
+    <div>
+      <div class="param-name" style="margin-bottom:0.6rem;">Singular values σᵢ = √λᵢ(XᵀX) — smallest highlighted</div>
+      <canvas id="svCanvas" class="short" role="img" aria-label="Singular values bar chart"></canvas>
+
+      <div class="formula-box" style="margin-top:0.5rem;">
+        SVD &amp; VIF<br>
+        <code>X = UΣVᵀ,  σᵢ = √λᵢ(XᵀX),  κ = σ_max / σ_min</code><br>
+        <code>VIFⱼ = (R⁻¹)ⱼⱼ = 1 / (1 − Rⱼ²)</code><br>
+        <span style="font-size:0.72rem;">As correlations → 1: σ_min → 0, κ → ∞, VIF → ∞ — XᵀX becomes singular. A valid R requires ρ(x₃,·)² &lt; (1+ρ(x₁,x₂))/2, so its slider is capped accordingly.</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="copyright">© Designed by T.Tsukazaki 2026</div>
+
+<script>
+(function() {
+
+  function dpr() { return window.devicePixelRatio || 1; }
+
+  function setupCanvas(canvas) {
+    const rect = canvas.getBoundingClientRect();
+    const d = dpr();
+    canvas.width = rect.width * d;
+    canvas.height = rect.height * d;
+    const ctx = canvas.getContext('2d');
+    ctx.setTransform(d, 0, 0, d, 0, 0);
+    return { ctx, w: rect.width, h: rect.height };
+  }
+
+  function fmt(x) {
+    if (!isFinite(x)) return '∞';
+    if (Math.abs(x) >= 1000) return x.toExponential(1);
+    if (Math.abs(x) >= 100) return x.toFixed(1);
+    return x.toFixed(2);
+  }
+  function clamp(x, a, b) { return Math.min(b, Math.max(a, x)); }
+
+  // ===========================================================
+  //  共有状態（すべてのスライダー / パネルが参照する単一の真実）
+  //  a      = corr(x₁, x₂)             … 射影パネルの角度とも連動
+  //  b      = corr(x₃, x₁) = corr(x₃, x₂)
+  //  height = 残差ノルム ‖e‖ → σ（誤差スケール）
+  // ===========================================================
+  const S = { a: 0, b: 0, height: 3 };
+  const H_REF = 3;                 // σ = ‖e‖ / H_REF（height=3 で σ=1）
+
+  // R が正定値であるための上限: b² < (1+a)/2
+  function bMaxFor(a) { return Math.sqrt(Math.max(0, (1 + a) / 2)) * 0.999; }
+  function enforce() {
+    S.a = clamp(S.a, 0, 0.99);
+    S.b = clamp(S.b, 0, Math.min(0.99, bMaxFor(S.a)));
+    S.height = clamp(S.height, 0, 6);
+  }
+
+  // ===========================================================
+  //  線形代数ユーティリティ（小さな対称行列向け）
+  // ===========================================================
+
+  // Jacobi 法による対称行列の固有値分解（降順ソート）
+  // returns { values: [...], vectors: [v0, v1, ...] }（各 vectors[i] は列ベクトル）
+  function jacobi(ain, n) {
+    const a = ain.map(r => r.slice());
+    const v = Array.from({length: n}, (_, i) => Array.from({length: n}, (_, j) => i === j ? 1 : 0));
+    for (let sweep = 0; sweep < 60; sweep++) {
+      let off = 0;
+      for (let p = 0; p < n - 1; p++) for (let q = p + 1; q < n; q++) off += Math.abs(a[p][q]);
+      if (off < 1e-15) break;
+      for (let p = 0; p < n - 1; p++) {
+        for (let q = p + 1; q < n; q++) {
+          const apq = a[p][q];
+          if (Math.abs(apq) < 1e-300) continue;
+          const app = a[p][p], aqq = a[q][q];
+          const theta = (aqq - app) / (2 * apq);
+          const t = (theta >= 0 ? 1 : -1) / (Math.abs(theta) + Math.sqrt(theta * theta + 1));
+          const c = 1 / Math.sqrt(t * t + 1);
+          const s = t * c;
+          const tau = s / (1 + c);
+          a[p][p] = app - t * apq;
+          a[q][q] = aqq + t * apq;
+          a[p][q] = 0; a[q][p] = 0;
+          for (let i = 0; i < n; i++) {
+            if (i !== p && i !== q) {
+              const aip = a[i][p], aiq = a[i][q];
+              a[i][p] = aip - s * (aiq + tau * aip); a[p][i] = a[i][p];
+              a[i][q] = aiq + s * (aip - tau * aiq); a[q][i] = a[i][q];
+            }
+          }
+          for (let i = 0; i < n; i++) {
+            const vip = v[i][p], viq = v[i][q];
+            v[i][p] = vip - s * (viq + tau * vip);
+            v[i][q] = viq + s * (vip - tau * viq);
+          }
+        }
+      }
+    }
+    const idx = [...Array(n).keys()].sort((i, j) => a[j][j] - a[i][i]);
+    const values = idx.map(i => a[i][i]);
+    const vectors = idx.map(i => v.map(row => row[i]));
+    return { values, vectors };
+  }
+
+  // 固有分解から逆行列を再構成: R⁻¹ = Σ (1/λᵢ) vᵢ vᵢᵀ
+  function inverseFromEig(eig, n) {
+    const inv = Array.from({length: n}, () => Array(n).fill(0));
+    for (let k = 0; k < n; k++) {
+      const invl = 1 / eig.values[k];
+      const vec = eig.vectors[k];
+      for (let i = 0; i < n; i++)
+        for (let j = 0; j < n; j++)
+          inv[i][j] += invl * vec[i] * vec[j];
+    }
+    return inv;
+  }
+
+  // ===========================================================
+  //  Panel A : 直交射影 (3D)
+  // ===========================================================
+
+  const cam = { az: -0.6, el: 1.0 };   // 方位角・仰角（ドラッグで更新）
+  let projScale = 36, projCx = 0, projCy = 0;
+
+  function project(p) {
+    const ca = Math.cos(cam.az), sa = Math.sin(cam.az);
+    const x = p[0] * ca - p[1] * sa;
+    const y = p[0] * sa + p[1] * ca;
+    const z = p[2];
+    const ce = Math.cos(cam.el), se = Math.sin(cam.el);
+    const z2 = y * se + z * ce;        // 画面の縦成分（高さ）
+    return { sx: projCx + x * projScale, sy: projCy - z2 * projScale };
+  }
+
+  function drawArrow(ctx, x0, y0, x1, y1, color, width, dash) {
+    ctx.save();
+    ctx.strokeStyle = color; ctx.fillStyle = color; ctx.lineWidth = width;
+    ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+    ctx.setLineDash(dash ? [5, 4] : []);
+    ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x1, y1); ctx.stroke();
+    ctx.setLineDash([]);
+    const ang = Math.atan2(y1 - y0, x1 - x0), hl = 9;
+    if (Math.hypot(x1 - x0, y1 - y0) > 2) {
+      ctx.beginPath();
+      ctx.moveTo(x1, y1);
+      ctx.lineTo(x1 - hl * Math.cos(ang - 0.4), y1 - hl * Math.sin(ang - 0.4));
+      ctx.lineTo(x1 - hl * Math.cos(ang + 0.4), y1 - hl * Math.sin(ang + 0.4));
+      ctx.closePath(); ctx.fill();
+    }
+    ctx.restore();
+  }
+
+  function vec3(ctx, p0, p1, color, width, dash) {
+    const a = project(p0), b = project(p1);
+    drawArrow(ctx, a.sx, a.sy, b.sx, b.sy, color, width, dash);
+  }
+
+  function label3(ctx, p, text, color) {
+    const s = project(p);
+    ctx.fillStyle = color; ctx.font = '11px "Courier New", monospace';
+    ctx.textAlign = 'left';
+    ctx.fillText(text, s.sx + 6, s.sy - 6);
+  }
+
+  function renderProjection() {
+    const canvas = document.getElementById('projCanvas');
+    const { ctx, w, h } = setupCanvas(canvas);
+    ctx.clearRect(0, 0, w, h);
+    projScale = Math.min(w, h) / 9.5;
+    projCx = w / 2; projCy = h * 0.60;
+
+    const th = Math.acos(clamp(S.a, -1, 1));   // 角度 = arccos(ρ)
+    const height = S.height;
+    const L = 3;
+    const cs = Math.cos(th), sn = Math.sin(th);
+    const x1 = [L, 0, 0];
+    const x2 = [L * cs, L * sn, 0];
+    const yhat = [2.6, 1.4, 0];               // 平面 C(X) 上の固定ターゲット
+    const y = [yhat[0], yhat[1], height];
+
+    // ŷ = β₁x₁ + β₂x₂ を解く
+    const beta2 = yhat[1] / (L * sn);
+    const beta1 = (yhat[0] - beta2 * L * cs) / L;
+
+    // --- C(X) 平面（グリッド + 半透明塗り）---
+    const ext = 4.2;
+    const corners = [[-ext,-ext,0],[ext,-ext,0],[ext,ext,0],[-ext,ext,0]].map(project);
+    ctx.beginPath();
+    ctx.moveTo(corners[0].sx, corners[0].sy);
+    for (let i = 1; i < 4; i++) ctx.lineTo(corners[i].sx, corners[i].sy);
+    ctx.closePath();
+    ctx.fillStyle = 'rgba(167,139,250,0.08)';
+    ctx.fill();
+    ctx.strokeStyle = '#2a2a3a'; ctx.lineWidth = 1;
+    for (let g = -4; g <= 4; g++) {
+      let a = project([g, -ext, 0]), b = project([g, ext, 0]);
+      ctx.beginPath(); ctx.moveTo(a.sx, a.sy); ctx.lineTo(b.sx, b.sy); ctx.stroke();
+      a = project([-ext, g, 0]); b = project([ext, g, 0]);
+      ctx.beginPath(); ctx.moveTo(a.sx, a.sy); ctx.lineTo(b.sx, b.sy); ctx.stroke();
+    }
+
+    // --- 分解の平行四辺形 0 → β₁x₁ → ŷ → β₂x₂ ---
+    const P = [
+      project([0, 0, 0]),
+      project([beta1 * x1[0], beta1 * x1[1], 0]),
+      project([yhat[0], yhat[1], 0]),
+      project([beta2 * x2[0], beta2 * x2[1], 0]),
+    ];
+    ctx.save();
+    ctx.setLineDash([3, 3]); ctx.strokeStyle = 'rgba(167,139,250,0.45)'; ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(P[0].sx, P[0].sy);
+    ctx.lineTo(P[1].sx, P[1].sy); ctx.lineTo(P[2].sx, P[2].sy);
+    ctx.lineTo(P[3].sx, P[3].sy); ctx.closePath(); ctx.stroke();
+    ctx.restore();
+
+    // --- 基底ベクトル x₁, x₂ ---
+    vec3(ctx, [0,0,0], x1, '#5a5870', 3);
+    vec3(ctx, [0,0,0], x2, '#5a5870', 3);
+    label3(ctx, x1, 'x₁', '#9b96c0');
+    label3(ctx, x2, 'x₂', '#9b96c0');
+
+    // --- ŷ（射影）, y, 残差 e ---
+    vec3(ctx, [0,0,0], yhat, '#a78bfa', 4);
+    vec3(ctx, [0,0,0], y, '#e8e6f0', 4);
+    vec3(ctx, yhat, y, '#f97316', 3, true);
+    label3(ctx, yhat, 'ŷ', '#a78bfa');
+    label3(ctx, y, 'y', '#e8e6f0');
+
+    // --- ŷ における直角マーカー（e ⊥ 平面）---
+    if (height > 0.05) {
+      const m = 0.4;
+      const r0 = project(yhat);
+      const r1 = project([yhat[0], yhat[1], m]);
+      const r2 = project([yhat[0] + m * Math.cos(cam.az), yhat[1] - m * Math.sin(cam.az), 0]);
+      ctx.strokeStyle = '#f97316'; ctx.lineWidth = 1; ctx.setLineDash([]);
+      ctx.beginPath();
+      ctx.moveTo(r1.sx, r1.sy);
+      ctx.lineTo(r0.sx + (r1.sx - r0.sx) + (r2.sx - r0.sx), r0.sy + (r1.sy - r0.sy) + (r2.sy - r0.sy));
+      ctx.lineTo(r2.sx, r2.sy);
+      ctx.stroke();
+    }
+
+    // --- 数値表示 ---
+    document.getElementById('beta1Val').textContent = fmt(beta1);
+    document.getElementById('beta2Val').textContent = fmt(beta2);
+    document.getElementById('cosVal').textContent = S.a.toFixed(3);
+    const normYhat2 = yhat[0]*yhat[0] + yhat[1]*yhat[1];
+    const normY2 = normYhat2 + height*height;
+    document.getElementById('r2Val').textContent = (normY2 === 0 ? 0 : normYhat2 / normY2).toFixed(3);
+  }
+
+  // ===========================================================
+  //  Panel B + C : 共線性の解剖
+  // ===========================================================
+
+  function buildCorrMatrix(a, b) {
+    return [
+      [1, a, b],
+      [a, 1, b],
+      [b, b, 1],
+    ];
+  }
+
+  function renderCollinearity() {
+    const R = buildCorrMatrix(S.a, S.b);
+    const eig = jacobi(R, 3);                       // λ(R) = λ(XᵀX)
+    const sv = eig.values.map(l => Math.sqrt(Math.max(0, l)));   // 特異値 σ = √λ
+    const kappa = sv[0] / sv[2];
+    const Rinv = inverseFromEig(eig, 3);
+    const vif = [Rinv[0][0], Rinv[1][1], Rinv[2][2]];
+
+    setCard('vif1Val', vif[0]); setCard('vif2Val', vif[1]); setCard('vif3Val', vif[2]);
+    document.getElementById('kappaVal').textContent = fmt(kappa);
+
+    drawHeatmap(R, ['x₁','x₂','x₃']);
+    drawSingularValues(sv);
+    drawNullVector(eig.vectors[2], ['x₁','x₂','x₃']);   // 最小固有値の固有ベクトル
+    renderEllipse(Rinv, vif, S.height / H_REF);          // σ で拡大縮小
+  }
+
+  function setCard(id, v) {
+    const el = document.getElementById(id);
+    el.textContent = fmt(v);
+    el.style.color = v >= 10 ? '#f97316' : (v >= 5 ? '#fbbf24' : '#e8e6f0');
+  }
+
+  // 相関行列ヒートマップ
+  function drawHeatmap(R, names) {
+    const canvas = document.getElementById('corrCanvas');
+    const { ctx, w, h } = setupCanvas(canvas);
+    ctx.clearRect(0, 0, w, h);
+    const n = R.length;
+    const pad = 30;
+    const cell = Math.min((w - pad - 10) / n, (h - pad - 10) / n);
+    const ox = pad, oy = 8;
+
+    for (let i = 0; i < n; i++) {
+      for (let j = 0; j < n; j++) {
+        const v = R[i][j];
+        const m = Math.min(1, Math.abs(v));
+        const r = Math.round(13 + m * (251 - 13));
+        const g = Math.round(13 + m * (191 - 13));
+        const b = Math.round(20 + m * (36 - 20));
+        ctx.fillStyle = `rgb(${r},${g},${b})`;
+        ctx.fillRect(ox + j * cell, oy + i * cell, cell - 2, cell - 2);
+        ctx.fillStyle = m > 0.5 ? '#0d0d14' : '#9b96c0';
+        ctx.font = '11px "Courier New", monospace';
+        ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.fillText(v.toFixed(2), ox + j * cell + cell / 2 - 1, oy + i * cell + cell / 2);
+      }
+    }
+    ctx.fillStyle = '#6a677a'; ctx.font = '10px monospace';
+    ctx.textBaseline = 'middle';
+    for (let i = 0; i < n; i++) {
+      ctx.textAlign = 'right';
+      ctx.fillText(names[i], ox - 5, oy + i * cell + cell / 2);
+      ctx.textAlign = 'center';
+      ctx.fillText(names[i], ox + i * cell + cell / 2, oy + n * cell + 10);
+    }
+  }
+
+  // 特異値の棒グラフ（最小を強調）
+  function drawSingularValues(sv) {
+    const canvas = document.getElementById('svCanvas');
+    const { ctx, w, h } = setupCanvas(canvas);
+    ctx.clearRect(0, 0, w, h);
+    const pad = 34, n = sv.length;
+    const maxV = Math.max(...sv, 1.5);
+    const plotW = w - pad * 1.5, plotH = h - pad * 1.3;
+
+    ctx.strokeStyle = '#2a2a3a'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(pad, 8); ctx.lineTo(pad, h - pad); ctx.lineTo(w - pad * 0.5, h - pad); ctx.stroke();
+    ctx.fillStyle = '#3a3850'; ctx.font = '9px monospace';
+    ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+    for (let k = 0; k <= 3; k++) {
+      const yv = maxV / 3 * k;
+      const py = (h - pad) - (yv / maxV) * plotH;
+      ctx.fillText(yv.toFixed(2), pad - 5, py);
+      ctx.strokeStyle = '#1e1e2a';
+      ctx.beginPath(); ctx.moveTo(pad, py); ctx.lineTo(w - pad * 0.5, py); ctx.stroke();
+    }
+
+    const bw = plotW / n * 0.55;
+    const minIdx = sv.length - 1;
+    for (let i = 0; i < n; i++) {
+      const cx = pad + plotW * (i + 0.5) / n;
+      const bh = (sv[i] / maxV) * plotH;
+      const by = (h - pad) - bh;
+      const isMin = i === minIdx;
+      const grad = ctx.createLinearGradient(0, by, 0, h - pad);
+      if (isMin) { grad.addColorStop(0, 'rgba(249,115,22,0.95)'); grad.addColorStop(1, 'rgba(194,65,12,0.4)'); }
+      else { grad.addColorStop(0, 'rgba(251,191,36,0.9)'); grad.addColorStop(1, 'rgba(217,119,6,0.35)'); }
+      ctx.fillStyle = grad;
+      ctx.fillRect(cx - bw / 2, by, bw, bh);
+
+      ctx.fillStyle = isMin ? '#f97316' : '#9b96c0';
+      ctx.font = '10px "Courier New", monospace';
+      ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
+      ctx.fillText(sv[i].toFixed(3), cx, by - 3);
+      ctx.fillStyle = '#6a677a'; ctx.textBaseline = 'top';
+      ctx.fillText('σ' + (i + 1), cx, h - pad + 4);
+    }
+    ctx.fillStyle = '#f97316'; ctx.font = '9px monospace';
+    ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+    ctx.fillText('σ_min', pad + plotW * (minIdx + 0.5) / n, h - pad + 15);
+  }
+
+  // 最小特異値方向の固有ベクトル（どの変数が打ち消し合うか）
+  function drawNullVector(vec, names) {
+    const el = document.getElementById('nullVec');
+    let maxAbs = 0, sign = 1;
+    vec.forEach(v => { if (Math.abs(v) > maxAbs) { maxAbs = Math.abs(v); sign = v < 0 ? -1 : 1; } });
+    const parts = vec.map((v, i) => {
+      const val = v * sign;
+      const cls = Math.abs(val) > 0.45 ? 'big' : 'small';
+      return `<span class="${cls}">${val >= 0 ? '+' : '−'}${Math.abs(val).toFixed(2)}·${names[i]}</span>`;
+    });
+    el.innerHTML = parts.join(' &nbsp; ');
+  }
+
+  // パラメータ共分散の楕円（β₁,β₂ の周辺分布）— σ で拡大縮小
+  function renderEllipse(Rinv, vif, sigma) {
+    const canvas = document.getElementById('ellipseCanvas');
+    const { ctx, w, h } = setupCanvas(canvas);
+    ctx.clearRect(0, 0, w, h);
+    const cx = w / 2, cy = h / 2;
+    const PX = 26;   // 1 標準偏差あたりのピクセル数（σ=1, ρ=0 で半径 26px の円）
+    const sc = PX * sigma;
+
+    // β₁,β₂ の 2×2 共分散ブロック（3×3 R⁻¹ の周辺）
+    const cov = [[Rinv[0][0], Rinv[0][1]], [Rinv[1][0], Rinv[1][1]]];
+    const e2 = jacobi(cov, 2);
+    const major = Math.sqrt(e2.values[0]);   // √λ（爆発する方向）
+    const minor = Math.sqrt(e2.values[1]);
+    const uMaj = e2.vectors[0], uMin = e2.vectors[1];
+
+    // 背景の十字軸
+    ctx.strokeStyle = '#2a2a3a'; ctx.lineWidth = 1; ctx.setLineDash([2, 3]);
+    ctx.beginPath(); ctx.moveTo(cx, 8); ctx.lineTo(cx, h - 8); ctx.moveTo(8, cy); ctx.lineTo(w - 8, cy); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = '#3a3850'; ctx.font = '10px monospace';
+    ctx.textAlign = 'right'; ctx.fillText('β₂', cx - 4, 16);
+    ctx.textAlign = 'left'; ctx.textBaseline = 'middle'; ctx.fillText('β₁', w - 16, cy - 6);
+
+    // 楕円（canvas 範囲外ははみ出して描画 = 不確実性が無限に伸びる様子）
+    ctx.beginPath();
+    for (let t = 0; t <= Math.PI * 2 + 0.01; t += 0.05) {
+      const ax = major * Math.cos(t), ay = minor * Math.sin(t);
+      const px = cx + sc * (ax * uMaj[0] + ay * uMin[0]);
+      const py = cy - sc * (ax * uMaj[1] + ay * uMin[1]);
+      if (t === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+    }
+    ctx.closePath();
+    ctx.fillStyle = 'rgba(56,189,248,0.12)';
+    ctx.strokeStyle = '#38bdf8'; ctx.lineWidth = 2;
+    ctx.fill(); ctx.stroke();
+
+    // 長軸（爆発方向）の矢印
+    const len = sc * major;
+    drawArrow(ctx, cx, cy, cx + uMaj[0] * len, cy - uMaj[1] * len, 'rgba(249,115,22,0.85)', 1.5);
+    drawArrow(ctx, cx, cy, cx - uMaj[0] * len, cy + uMaj[1] * len, 'rgba(249,115,22,0.85)', 1.5);
+
+    ctx.beginPath(); ctx.arc(cx, cy, 3, 0, Math.PI * 2);
+    ctx.fillStyle = '#fbbf24'; ctx.fill();
+
+    ctx.fillStyle = 'rgba(249,115,22,0.8)'; ctx.font = '10px monospace';
+    ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+    const note = sigma === 0 ? 'σ = 0 → point (no uncertainty)'
+                             : (major > minor * 1.3 ? 'uncertainty → ∞' : 'isotropic');
+    ctx.fillText(note, cx, h - 18);
+
+    // 数値
+    document.getElementById('sdB1Val').textContent = fmt(sigma * Math.sqrt(vif[0]));
+    document.getElementById('sdB2Val').textContent = fmt(sigma * Math.sqrt(vif[1]));
+    document.getElementById('sigmaVal').textContent = sigma.toFixed(2);
+    document.getElementById('axisRatioVal').textContent = fmt(major / minor);
+  }
+
+  // ===========================================================
+  //  スライダー同期 / 初期化
+  // ===========================================================
+
+  function setFill(fillId, val, min, max) {
+    document.getElementById(fillId).style.width = clamp((val - min) / (max - min), 0, 1) * 100 + '%';
+  }
+
+  // 状態 S からすべてのコントロールを書き戻す（双方向同期の要）
+  function syncControls() {
+    // ρ(x₁,x₂)：上段 + 中段
+    ['rho12a', 'rho12b'].forEach(id => { document.getElementById(id).value = S.a; });
+    ['fill_rho12a', 'fill_rho12b'].forEach(id => setFill(id, S.a, 0, 0.99));
+    ['val_rho12a', 'val_rho12b'].forEach(id => document.getElementById(id).textContent = S.a.toFixed(2));
+
+    // ρ(x₃,·)：上段 + 中段
+    ['rho3a', 'rho3b'].forEach(id => { document.getElementById(id).value = S.b; });
+    ['fill_rho3a', 'fill_rho3b'].forEach(id => setFill(id, S.b, 0, 0.99));
+    ['val_rho3a', 'val_rho3b'].forEach(id => document.getElementById(id).textContent = S.b.toFixed(2));
+    const bmax = Math.min(0.99, bMaxFor(S.a));
+    ['rho3max_a', 'rho3max_b'].forEach(id => document.getElementById(id).textContent = 'max ≈ ' + bmax.toFixed(2));
+
+    // 角度（= arccos a）
+    const ang = Math.acos(clamp(S.a, -1, 1)) * 180 / Math.PI;
+    document.getElementById('angle').value = ang;
+    setFill('angleFill', ang, 5, 90);
+    document.getElementById('angleVal').textContent = ang.toFixed(1) + '°';
+
+    // 残差 ‖e‖
+    document.getElementById('height').value = S.height;
+    setFill('heightFill', S.height, 0, 6);
+    document.getElementById('heightVal').textContent = S.height.toFixed(1);
+  }
+
+  function renderAll() { renderProjection(); renderCollinearity(); }
+
+  function commit() { enforce(); syncControls(); renderAll(); }
+
+  function init() {
+    // ρ(x₁,x₂) スライダー（2 本とも S.a を更新）
+    ['rho12a', 'rho12b'].forEach(id =>
+      document.getElementById(id).addEventListener('input', e => { S.a = parseFloat(e.target.value); commit(); }));
+
+    // ρ(x₃,·) スライダー（2 本とも S.b を更新、上限は enforce でクランプ）
+    ['rho3a', 'rho3b'].forEach(id =>
+      document.getElementById(id).addEventListener('input', e => { S.b = parseFloat(e.target.value); commit(); }));
+
+    // 角度スライダー → S.a（ρ と連動）
+    document.getElementById('angle').addEventListener('input', e => {
+      S.a = Math.cos(parseFloat(e.target.value) * Math.PI / 180);
+      commit();
+    });
+
+    // 残差 ‖e‖ → S.height（楕円の σ スケールに影響）
+    document.getElementById('height').addEventListener('input', e => {
+      S.height = parseFloat(e.target.value); commit();
+    });
+
+    // Panel A : ドラッグ回転
+    const proj = document.getElementById('projCanvas');
+    let dragging = false, lastX = 0, lastY = 0;
+    proj.addEventListener('pointerdown', e => { dragging = true; lastX = e.clientX; lastY = e.clientY; proj.setPointerCapture(e.pointerId); });
+    proj.addEventListener('pointermove', e => {
+      if (!dragging) return;
+      cam.az += (e.clientX - lastX) * 0.01;
+      cam.el = clamp(cam.el + (e.clientY - lastY) * 0.01, 0.15, 1.5);
+      lastX = e.clientX; lastY = e.clientY;
+      renderProjection();
+    });
+    proj.addEventListener('pointerup', () => { dragging = false; });
+    proj.addEventListener('pointercancel', () => { dragging = false; });
+
+    commit();
+    window.addEventListener('resize', renderAll);
+  }
+
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
+  else init();
+
+})();
+</script>
+</body>
+</html>
