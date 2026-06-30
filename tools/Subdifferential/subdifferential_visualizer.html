@@ -1,0 +1,1633 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Subdifferential Visualizer — Convex Analysis</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'Helvetica Neue', 'Hiragino Sans', 'Hiragino Kaku Gothic ProN', 'Yu Gothic', sans-serif;
+    background: #0d0d14;
+    color: #e8e6f0;
+    min-height: 100vh;
+    padding: 2rem;
+  }
+
+  h1 {
+    font-size: 1.1rem;
+    font-weight: 400;
+    color: #9b96c0;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    margin-bottom: 0.25rem;
+  }
+  h2 {
+    font-size: 2rem;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    margin-bottom: 0.4rem;
+  }
+  .title-disclaimer {
+    font-size: 0.72rem;
+    color: #5a5870;
+    margin-bottom: 1.5rem;
+    line-height: 1.6;
+  }
+
+  .data-selector {
+    background: #16161f;
+    border: 1px solid #2a2a3a;
+    border-radius: 12px;
+    padding: 1.25rem 1.5rem;
+    margin-bottom: 1.5rem;
+    display: flex;
+    align-items: flex-start;
+    gap: 2.5rem;
+    flex-wrap: wrap;
+  }
+  .cb-item { display: flex; flex-direction: column; gap: 0.45rem; min-width: 260px; flex: 1; }
+  .cb-head { display: flex; justify-content: space-between; align-items: baseline; gap: 1rem; }
+  .cb-item label {
+    font-size: 0.8rem;
+    letter-spacing: 0.05em;
+    color: #9b96c0;
+    font-weight: 500;
+  }
+  .cb-val { color: #fbbf24; }
+  .cb-ends { display: flex; justify-content: space-between; font-size: 0.68rem; color: #3a3850; margin-top: 2px; }
+
+  /* segmented control for picking the example function */
+  .seg { display: flex; flex-wrap: wrap; gap: 0.4rem; }
+  .seg button {
+    font-family: inherit;
+    font-size: 0.8rem;
+    color: #9b96c0;
+    background: #0d0d14;
+    border: 1px solid #2a2a3a;
+    border-radius: 8px;
+    padding: 0.5rem 0.85rem;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .seg button:hover { border-color: #4a4860; color: #c8c4e0; }
+  .seg button.active {
+    color: #0d0d14;
+    background: #a78bfa;
+    border-color: #a78bfa;
+    font-weight: 700;
+  }
+
+  /* dimension mode toggle (1D / 2D) */
+  .dim-toggle { display: flex; gap: 0.5rem; margin-bottom: 1.5rem; }
+  .dim-toggle button {
+    font-family: inherit;
+    font-size: 0.85rem;
+    letter-spacing: 0.05em;
+    color: #9b96c0;
+    background: #16161f;
+    border: 1px solid #2a2a3a;
+    border-radius: 10px;
+    padding: 0.6rem 1.4rem;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .dim-toggle button:hover { border-color: #4a4860; }
+  .dim-toggle button.active {
+    color: #0d0d14;
+    background: linear-gradient(90deg, #6c63e0, #a78bfa);
+    border-color: #a78bfa;
+    font-weight: 700;
+  }
+  body.mode1 .dim2 { display: none; }
+  body.mode2 .dim1 { display: none; }
+
+  .grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1.5rem;
+    margin-bottom: 1.5rem;
+  }
+
+  .panel {
+    background: #16161f;
+    border: 1px solid #2a2a3a;
+    border-radius: 16px;
+    padding: 1.75rem;
+    position: relative;
+    overflow: hidden;
+    margin-bottom: 1.5rem;
+  }
+  .panel::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 2px;
+    border-radius: 16px 16px 0 0;
+  }
+  .panel.primal::before { background: linear-gradient(90deg, #6c63e0, #a78bfa); }
+  .panel.submap::before { background: linear-gradient(90deg, #0ea5e9, #38bdf8); }
+  .panel.prox::before   { background: linear-gradient(90deg, #d97706, #fbbf24); }
+
+  .panel-title {
+    font-size: 1.3rem;
+    font-weight: 700;
+    margin-bottom: 0.25rem;
+    letter-spacing: -0.01em;
+  }
+  .panel.primal .panel-title { color: #a78bfa; }
+  .panel.submap .panel-title { color: #38bdf8; }
+  .panel.prox   .panel-title { color: #fbbf24; }
+
+  .panel-subtitle {
+    font-size: 0.8rem;
+    color: #5a5870;
+    margin-bottom: 1.5rem;
+    letter-spacing: 0.05em;
+  }
+
+  .legend {
+    display: flex;
+    gap: 1.2rem;
+    font-size: 0.75rem;
+    color: #6a677a;
+    margin-bottom: 1rem;
+    margin-top: -0.5rem;
+    flex-wrap: wrap;
+  }
+  .legend-item { display: flex; align-items: center; gap: 0.5rem; }
+  .legend-line { width: 20px; height: 2px; }
+  .legend-line.solid-f  { background: #e8e6f0; }
+  .legend-line.solid-s  { background: #a78bfa; }
+  .legend-line.solid-g  { background: #f97316; }
+  .legend-line.solid-c  { background: #38bdf8; }
+
+  canvas {
+    width: 100%;
+    height: 300px;
+    display: block;
+    border-radius: 8px;
+    background: #0d0d14;
+    margin-bottom: 1.5rem;
+  }
+  canvas.drag { cursor: ew-resize; }
+
+  .formula-box {
+    margin-top: 1.5rem;
+    padding: 0.9rem 1.1rem;
+    background: #0d0d14;
+    border: 1px solid #2a2a3a;
+    border-radius: 8px;
+    font-size: 0.78rem;
+    color: #5a5870;
+    line-height: 1.7;
+  }
+  .formula-box code { font-family: 'Courier New', monospace; font-size: 0.82rem; }
+
+  /* collapsible "how to read this panel" explainer */
+  .explain {
+    margin-top: 1rem;
+    border: 1px solid #2a2a3a;
+    border-radius: 8px;
+    background: #0d0d14;
+    overflow: hidden;
+  }
+  .explain > summary {
+    cursor: pointer;
+    padding: 0.7rem 1.1rem;
+    font-size: 0.8rem;
+    color: #9b96c0;
+    letter-spacing: 0.04em;
+    list-style: none;
+    user-select: none;
+  }
+  .explain > summary::-webkit-details-marker { display: none; }
+  .explain > summary::before { content: '▸ '; color: #fbbf24; }
+  .explain[open] > summary::before { content: '▾ '; }
+  .explain .explain-body {
+    padding: 0 1.1rem 1rem;
+    font-size: 0.78rem;
+    color: #8a87a0;
+    line-height: 1.7;
+  }
+  .explain .explain-body h4 {
+    color: #9b96c0;
+    font-size: 0.78rem;
+    margin: 0.9rem 0 0.3rem;
+    letter-spacing: 0.04em;
+  }
+  .explain .explain-body code { font-family: 'Courier New', monospace; color: #fbbf24; }
+  .explain .explain-body ul { margin: 0.3rem 0 0.3rem 1.1rem; }
+  .explain .explain-body li { margin-bottom: 0.3rem; }
+  .explain .explain-body .ekey { color: #fbbf24; font-weight: 700; }
+  .panel.primal .formula-box code { color: #a78bfa; }
+  .panel.submap .formula-box code { color: #38bdf8; }
+  .panel.prox   .formula-box code { color: #fbbf24; }
+
+  .param-name {
+    font-size: 0.8rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: #6a677a;
+    font-weight: 500;
+  }
+  .param-value {
+    font-size: 1rem;
+    font-weight: 700;
+    font-family: 'Courier New', monospace;
+  }
+  .panel.primal .param-value { color: #a78bfa; }
+  .panel.submap .param-value { color: #38bdf8; }
+  .panel.prox   .param-value { color: #fbbf24; }
+  /* math labels must not be uppercased (β → "B") */
+  .math-label { text-transform: none; letter-spacing: 0.02em; }
+
+  .stat-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 0.6rem 1.5rem;
+    margin-top: 0.5rem;
+  }
+  .stat-row { display: flex; justify-content: space-between; align-items: baseline; }
+
+  .slider-wrap {
+    position: relative;
+    height: 4px;
+    background: #2a2a3a;
+    border-radius: 2px;
+    margin: 8px 0;
+  }
+  .slider-fill {
+    position: absolute;
+    left: 0; top: 0; bottom: 0;
+    border-radius: 2px;
+    pointer-events: none;
+    background: linear-gradient(90deg, #6c63e0, #a78bfa);
+  }
+  .data-selector .slider-fill { background: linear-gradient(90deg, #d97706, #fbbf24); }
+
+  input[type=range] {
+    -webkit-appearance: none;
+    appearance: none;
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    left: 0; right: 0;
+    width: 100%;
+    height: 4px;
+    background: transparent;
+    cursor: pointer;
+    margin: 0;
+  }
+  input[type=range]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 18px; height: 18px;
+    border-radius: 50%;
+    background: #e8e6f0;
+    border: 2px solid #2a2a3a;
+    box-shadow: 0 0 0 3px rgba(167,139,250,0.2);
+    cursor: pointer;
+    transition: box-shadow 0.15s;
+  }
+  input[type=range]:hover::-webkit-slider-thumb { box-shadow: 0 0 0 5px rgba(167,139,250,0.3); }
+  input[type=range]:disabled { opacity: 0.4; cursor: not-allowed; }
+  input[type=range]:disabled::-webkit-slider-thumb { cursor: not-allowed; }
+
+  .badge {
+    display: inline-block;
+    margin-top: 0.6rem;
+    padding: 0.35rem 0.7rem;
+    border-radius: 6px;
+    font-size: 0.75rem;
+    font-weight: 700;
+    letter-spacing: 0.03em;
+  }
+  .badge.on  { background: rgba(249,115,22,0.18); color: #f97316; border: 1px solid rgba(249,115,22,0.4); }
+  .badge.off { background: #0d0d14; color: #5a5870; border: 1px solid #2a2a3a; }
+
+  @media (max-width: 900px) {
+    .grid { grid-template-columns: 1fr; }
+    h2 { font-size: 1.5rem; }
+    .cb-item { min-width: 100%; }
+  }
+
+  .copyright {
+    position: fixed;
+    bottom: 10px;
+    right: 14px;
+    font-size: 0.65rem;
+    color: #3a3850;
+    letter-spacing: 0.04em;
+    pointer-events: none;
+    user-select: none;
+  }
+</style>
+</head>
+<body>
+
+<h1>Convex Analysis Playground</h1>
+<h2>Subdifferential Visualizer — ∂f(x₀)</h2>
+<p class="title-disclaimer">The subdifferential ∂f(x₀) of a convex function is the set of slopes g of all affine functions that <em>support</em> the graph from below: f(z) ≥ f(x₀) + g·(z − x₀). At smooth points it is a single number {f′(x₀)}; at a kink it spreads into a whole interval [f′₋, f′₊]. Drag the point x₀ along the curve (left panel) and watch the set ∂f(x₀) (right panel) — where it crosses g = 0 is a minimizer (0 ∈ ∂f). The bottom panel shows how that same fact drives the proximal operator and sparsity.</p>
+
+<div class="dim-toggle" id="dimToggle">
+  <button data-dim="1" class="active">1D &nbsp;f(x)</button>
+  <button data-dim="2">2D &nbsp;f(x₁, x₂)</button>
+</div>
+
+<!-- ============================================================= -->
+<!-- ===================  1D  MODE  ============================== -->
+<!-- ============================================================= -->
+<div class="dim1">
+
+<!-- ============ Control bar ============ -->
+<div class="data-selector">
+  <div class="cb-item" style="flex: 1.3;">
+    <label>Convex function f(x)</label>
+    <div class="seg" id="exampleSeg">
+      <button data-ex="abs" class="active">|x|</button>
+      <button data-ex="relu">max(0, x)</button>
+      <button data-ex="maxlin">max(|x|, 0.4)</button>
+      <button data-ex="quad">0.45·x²</button>
+    </div>
+    <div class="cb-ends" style="margin-top:6px;"><span>kink → interval</span><span>smooth → single slope</span></div>
+  </div>
+
+  <div class="cb-item">
+    <div class="cb-head"><label>Evaluation point x₀</label><span class="param-value cb-val" id="val_x0">0.00</span></div>
+    <div class="slider-wrap"><div class="slider-fill" id="fill_x0"></div>
+      <input type="range" id="x0" min="-3" max="3" step="0.01" value="0"></div>
+    <div class="cb-ends"><span>−3</span><span>snaps to kinks ● — or drag the dot →</span></div>
+  </div>
+
+  <div class="cb-item">
+    <div class="cb-head"><label>Subgradient g ∈ ∂f(x₀)</label><span class="param-value cb-val" id="val_g">0.00</span></div>
+    <div class="slider-wrap"><div class="slider-fill" id="fill_g"></div>
+      <input type="range" id="g" min="-1" max="1" step="0.001" value="0"></div>
+    <div class="cb-ends"><span id="g_lo">f′₋</span><span id="g_hi">f′₊</span></div>
+  </div>
+</div>
+
+<div class="grid">
+
+  <!-- ============ Panel A: Function & supporting lines ============ -->
+  <div class="panel primal">
+    <div class="panel-title">Function &amp; Supporting Lines</div>
+    <div class="panel-subtitle">every supporting line through (x₀, f(x₀)) lies below the graph — its slope is a subgradient</div>
+
+    <div class="legend">
+      <div class="legend-item"><div class="legend-line solid-f"></div>f(x)</div>
+      <div class="legend-item"><div class="legend-line solid-s"></div>supporting lines (slopes in ∂f(x₀))</div>
+      <div class="legend-item"><div class="legend-line solid-g"></div>selected slope g</div>
+    </div>
+
+    <canvas id="primalCanvas" class="drag" role="img" aria-label="Convex function with supporting lines"></canvas>
+
+    <div class="stat-grid">
+      <div class="stat-row"><span class="param-name math-label">f(x₀)</span><span class="param-value" id="fx0Val">—</span></div>
+      <div class="stat-row"><span class="param-name math-label">∂f(x₀)</span><span class="param-value" id="sdVal">—</span></div>
+      <div class="stat-row"><span class="param-name math-label">f′₋ / f′₊</span><span class="param-value" id="lrVal">—</span></div>
+      <div class="stat-row"><span class="param-name math-label">selected g</span><span class="param-value" id="gShowVal">—</span></div>
+    </div>
+
+    <div class="formula-box">
+      Subgradient inequality<br>
+      <code>g ∈ ∂f(x₀)  ⟺  f(z) ≥ f(x₀) + g·(z − x₀)  ∀z</code><br>
+      <span style="font-size:0.72rem;">When ∂f(x₀) is a single point the curve is differentiable there (one tangent). At a kink many slopes work at once — the fan of lines is exactly the interval [f′₋, f′₊].</span>
+    </div>
+  </div>
+
+  <!-- ============ Panel B: Image of the subdifferential map ============ -->
+  <div class="panel submap">
+    <div class="panel-title">Subdifferential Map  x ↦ ∂f(x)</div>
+    <div class="panel-subtitle">the monotone graph of the set-valued slope — vertical jumps at kinks, crossing g = 0 marks a minimizer</div>
+
+    <div class="legend">
+      <div class="legend-item"><div class="legend-line solid-c"></div>∂f(x) (all x)</div>
+      <div class="legend-item"><div class="legend-line solid-g"></div>∂f(x₀) at current x₀</div>
+    </div>
+
+    <canvas id="submapCanvas" role="img" aria-label="Graph of the subdifferential map"></canvas>
+
+    <div class="stat-grid">
+      <div class="stat-row"><span class="param-name math-label">x₀</span><span class="param-value" id="x0Val">—</span></div>
+      <div class="stat-row"><span class="param-name math-label">width of ∂f(x₀)</span><span class="param-value" id="widthVal">—</span></div>
+      <div class="stat-row"><span class="param-name math-label">monotone?</span><span class="param-value" id="monoVal">✓ non-decreasing</span></div>
+      <div class="stat-row"><span class="param-name math-label">0 ∈ ∂f(x₀)?</span><span class="param-value" id="optVal">—</span></div>
+    </div>
+
+    <div id="optBadge" class="badge off">x₀ is not a minimizer</div>
+
+    <div class="formula-box">
+      Optimality (Fermat's rule)<br>
+      <code>0 ∈ ∂f(x⋆)  ⟺  x⋆ is a global minimizer</code><br>
+      <span style="font-size:0.72rem;">The map x ↦ ∂f(x) is monotone (non-decreasing). It is a curve where f is smooth and jumps vertically by [f′₋, f′₊] at each kink. A flat bottom of f shows up here as the graph resting on g = 0 over an interval — a whole set of minimizers.</span>
+    </div>
+  </div>
+
+</div>
+
+<!-- ============ Mid control bar (for Panel C) ============ -->
+<div class="data-selector" id="bar-mid">
+  <div class="cb-item">
+    <div class="cb-head"><label>Regularization strength λ</label><span class="param-value cb-val" id="val_lam">0.60</span></div>
+    <div class="slider-wrap"><div class="slider-fill" id="fill_lam"></div>
+      <input type="range" id="lam" min="0" max="3" step="0.01" value="0.6"></div>
+    <div class="cb-ends"><span>0 (no shrink)</span><span>→ stronger · wider dead-zone</span></div>
+  </div>
+  <div class="cb-item">
+    <div class="cb-head"><label>Input point v</label><span class="param-value cb-val" id="val_vin">1.00</span></div>
+    <div class="slider-wrap"><div class="slider-fill" id="fill_vin"></div>
+      <input type="range" id="vin" min="-3" max="3" step="0.01" value="1"></div>
+    <div class="cb-ends"><span>−3</span><span>drag the dot on the prox curve too →</span></div>
+  </div>
+</div>
+
+<!-- ============ Panel C: Proximal operator & sparsity ============ -->
+<div class="panel prox">
+  <div class="panel-title">Proximal Operator &amp; Sparsity</div>
+  <div class="panel-subtitle">prox<sub>λf</sub>(v) = argminₓ f(x) + ‖x − v‖²/(2λ) — Fermat's 0 ∈ ∂f makes the optimum stick at a minimizer, producing exact zeros</div>
+
+  <div class="legend">
+    <div class="legend-item"><div class="legend-line solid-g"></div>prox<sub>λf</sub>(v)</div>
+    <div class="legend-item"><div class="legend-line" style="background:#3a3850"></div>identity y = v</div>
+    <div class="legend-item"><div class="legend-line" style="background:rgba(251,191,36,0.55)"></div>dead-zone → minimizer (sparse)</div>
+  </div>
+
+  <canvas id="proxCanvas" class="drag" role="img" aria-label="Proximal operator map"></canvas>
+
+  <div class="stat-grid">
+    <div class="stat-row"><span class="param-name math-label">prox<sub>λf</sub>(v) = x</span><span class="param-value" id="proxVal">—</span></div>
+    <div class="stat-row"><span class="param-name math-label">shrinkage v − x</span><span class="param-value" id="shrinkVal">—</span></div>
+    <div class="stat-row"><span class="param-name math-label">(v − x)/λ ∈ ∂f(x)?</span><span class="param-value" id="relVal">—</span></div>
+    <div class="stat-row"><span class="param-name math-label">sparse (x at minimizer)?</span><span class="param-value" id="sparseVal">—</span></div>
+  </div>
+
+  <div id="sparseBadge" class="badge off">x = prox(v) is not at a minimizer</div>
+
+  <div class="formula-box">
+    Proximal optimality &amp; soft-thresholding<br>
+    <code>0 ∈ ∂f(x) + (x − v)/λ  ⟺  v − x ∈ λ·∂f(x)</code><br>
+    <code>f = |·| :  prox<sub>λ|·|</sub>(v) = sign(v)·max(|v| − λ, 0)</code> &nbsp;(soft-threshold)<br>
+    <span style="font-size:0.72rem;">Because 0 ∈ ∂|·|(0) = [−1, 1] is a fat set, every v ∈ [−λ, λ] is pulled exactly to 0 — that dead-zone <em>is</em> sparsity (the LASSO mechanism). A smooth regularizer (0.45·x²) has 0 ∈ ∂f at a single point, so prox is linear shrinkage v / (1 + 0.9λ) and never reaches exact zero.</span>
+  </div>
+
+  <details class="explain">
+    <summary>What does this panel show? (for the selected f, λ, v)</summary>
+    <div class="explain-body">
+
+      <h4>1 · What it computes</h4>
+      The proximal operator is the <em>solution</em> of a tug-of-war:
+      <code>prox<sub>λf</sub>(v) = argminₓ { f(x) + (x − v)² / (2λ) }</code>.
+      The penalty <code>(x − v)²/(2λ)</code> says "stay near v"; the term <code>f(x)</code> says "make f small".
+      Their compromise is the output x. The curve plots this map for <em>every</em> input v (horizontal axis)
+      to its output x = prox<sub>λf</sub>(v) (vertical axis), at the currently selected f and λ.
+
+      <h4>2 · What each input means</h4>
+      <ul>
+        <li><span class="ekey">f(x)</span> — the regularizer / penalty. The <em>shape of its subdifferential</em>
+          sets the shape of the map: a kink (where 0 ∈ ∂f is a fat interval) creates a flat zero region
+          (sparsity); a smooth f never does.</li>
+        <li><span class="ekey">λ</span> — the weight between data (v) and penalty (f). λ → 0 makes
+          prox(v) → v (the curve hugs the identity line); λ → ∞ makes prox(v) → argmin f (everything is
+          pulled to a minimizer). The dead-zone width grows with λ.</li>
+        <li><span class="ekey">v</span> — the input point being mapped. Read it as a noisy observation, or
+          the current iterate in an optimization step.</li>
+      </ul>
+
+      <h4>3 · How to read the picture</h4>
+      <ul>
+        <li><span class="ekey">Amber dead-zone</span> — the inputs v whose output sticks exactly on a
+          minimizer of f (0 ∈ ∂f(prox(v))). For f = |x| this is v ∈ [−λ, λ], all mapped to exactly 0:
+          that is sparsity.</li>
+        <li><span class="ekey">Dashed identity line y = v</span> — the no-shrinkage baseline; the gap down
+          to the curve is how far v is pulled.</li>
+        <li><span class="ekey">Orange arrow</span> — the shrinkage v − x for the current v.</li>
+        <li><span class="ekey">Readout (v − x)/λ ∈ ∂f(x)</span> — this is the optimality condition that
+          <em>characterizes</em> the prox: <code>0 ∈ ∂f(x) + (x − v)/λ ⟺ (v − x)/λ ∈ ∂f(x)</code>. A ✓ means
+          the displacement, scaled by 1/λ, is a valid subgradient at the output x.</li>
+      </ul>
+
+    </div>
+  </details>
+</div>
+
+</div><!-- /dim1 -->
+
+<!-- ============================================================= -->
+<!-- ===================  2D  MODE  ============================== -->
+<!-- ============================================================= -->
+<div class="dim2">
+
+<!-- ============ 2D control bar ============ -->
+<div class="data-selector">
+  <div class="cb-item" style="flex: 1.2;">
+    <label>Convex function f(x₁, x₂)</label>
+    <div class="seg" id="exampleSeg2">
+      <button data-ex="l1" class="active">‖x‖₁ = |x₁|+|x₂|</button>
+      <button data-ex="l2">‖x‖₂</button>
+    </div>
+    <div class="cb-ends" style="margin-top:6px;"><span>ℓ₁ → box / sparsity</span><span>ℓ₂ → disk</span></div>
+  </div>
+
+  <div class="cb-item">
+    <div class="cb-head"><label>x₀ — coordinate x₁</label><span class="param-value cb-val" id="val_x1">0.00</span></div>
+    <div class="slider-wrap"><div class="slider-fill" id="fill_x1"></div>
+      <input type="range" id="x1" min="-3" max="3" step="0.01" value="0"></div>
+    <div class="cb-ends"><span>−3</span><span>3</span></div>
+    <div class="cb-head" style="margin-top:0.6rem;"><label>x₀ — coordinate x₂</label><span class="param-value cb-val" id="val_x2">0.00</span></div>
+    <div class="slider-wrap"><div class="slider-fill" id="fill_x2"></div>
+      <input type="range" id="x2" min="-3" max="3" step="0.01" value="0"></div>
+    <div class="cb-ends"><span>−3</span><span>set x₁=x₂=0 to sit on the kink</span></div>
+  </div>
+</div>
+
+<div class="grid">
+
+  <!-- ============ Panel A2: Epigraph & supporting hyperplane ============ -->
+  <div class="panel primal">
+    <div class="panel-title">Epigraph &amp; Supporting Hyperplane</div>
+    <div class="panel-subtitle">the graph surface z = f(x₁,x₂) and a plane z = f(x₀) + g·(x − x₀) touching from below — drag to rotate</div>
+
+    <div class="legend">
+      <div class="legend-item"><div class="legend-line solid-f"></div>surface f</div>
+      <div class="legend-item"><div class="legend-line solid-s"></div>supporting hyperplane (slope g ∈ ∂f(x₀))</div>
+      <div class="legend-item"><div class="legend-line solid-g"></div>contact (x₀, f(x₀))</div>
+    </div>
+
+    <canvas id="primalCanvas2" class="drag" role="img" aria-label="Epigraph surface with supporting hyperplane"></canvas>
+
+    <div class="stat-grid">
+      <div class="stat-row"><span class="param-name math-label">f(x₀)</span><span class="param-value" id="fx0Val2">—</span></div>
+      <div class="stat-row"><span class="param-name math-label">∂f(x₀)</span><span class="param-value" id="sdVal2">—</span></div>
+      <div class="stat-row"><span class="param-name math-label">selected g</span><span class="param-value" id="gShowVal2">—</span></div>
+      <div class="stat-row"><span class="param-name math-label">0 ∈ ∂f(x₀)?</span><span class="param-value" id="optVal2">—</span></div>
+    </div>
+
+    <div class="formula-box">
+      Subgradient inequality (n-D)<br>
+      <code>g ∈ ∂f(x₀)  ⟺  f(z) ≥ f(x₀) + ⟨g, z − x₀⟩  ∀z</code><br>
+      <span style="font-size:0.72rem;">Each g ∈ ∂f(x₀) is the slope of a hyperplane that supports the epigraph at (x₀, f(x₀)). The whole set of valid slopes is drawn in the next panel.</span>
+    </div>
+  </div>
+
+  <!-- ============ Panel B2: Subdifferential set in gradient space ============ -->
+  <div class="panel submap">
+    <div class="panel-title">Subdifferential Set  ∂f(x₀) ⊂ ℝ²</div>
+    <div class="panel-subtitle">the set of subgradients in gradient space — a point, a segment, a box (ℓ₁), or a disk (ℓ₂) · click to pick g</div>
+
+    <div class="legend">
+      <div class="legend-item"><div class="legend-line solid-c"></div>∂f(x₀)</div>
+      <div class="legend-item"><div class="legend-line solid-g"></div>selected g</div>
+    </div>
+
+    <canvas id="submapCanvas2" class="drag" role="img" aria-label="Subdifferential set in gradient space"></canvas>
+
+    <div class="stat-grid">
+      <div class="stat-row"><span class="param-name math-label">x₀</span><span class="param-value" id="x0Val2">—</span></div>
+      <div class="stat-row"><span class="param-name math-label">type of ∂f(x₀)</span><span class="param-value" id="typeVal2">—</span></div>
+      <div class="stat-row"><span class="param-name math-label">g = (g₁, g₂)</span><span class="param-value" id="gPairVal2">—</span></div>
+      <div class="stat-row"><span class="param-name math-label">0 ∈ ∂f(x₀)?</span><span class="param-value" id="optVal2b">—</span></div>
+    </div>
+
+    <div id="optBadge2" class="badge off">x₀ is not a minimizer</div>
+
+    <div class="formula-box">
+      Set-valued slope<br>
+      <code>∂‖·‖₁(x) = ∂|x₁| × ∂|x₂|</code>  &nbsp; <code>∂‖·‖₂(0) = { g : ‖g‖₂ ≤ 1 }</code><br>
+      <span style="font-size:0.72rem;">At the origin ‖x‖₁ has the full box [−1,1]² and ‖x‖₂ the unit disk. Off the kink set the subdifferential collapses to a single gradient.</span>
+    </div>
+  </div>
+
+</div>
+
+<!-- ============ 2D mid control bar ============ -->
+<div class="data-selector" id="bar-mid2">
+  <div class="cb-item">
+    <div class="cb-head"><label>Regularization strength λ</label><span class="param-value cb-val" id="val_lam2">0.60</span></div>
+    <div class="slider-wrap"><div class="slider-fill" id="fill_lam2"></div>
+      <input type="range" id="lam2" min="0" max="3" step="0.01" value="0.6"></div>
+    <div class="cb-ends"><span>0 (no shrink)</span><span>→ stronger · larger sparse region</span></div>
+  </div>
+  <div class="cb-item">
+    <div class="cb-head"><label>Input point v = (v₁, v₂)</label><span class="param-value cb-val" id="val_vpair">(1.0, 0.5)</span></div>
+    <div class="slider-wrap"><div class="slider-fill" id="fill_v1"></div>
+      <input type="range" id="v1" min="-3" max="3" step="0.01" value="1"></div>
+    <div class="slider-wrap" style="margin-top:0.5rem;"><div class="slider-fill" id="fill_v2"></div>
+      <input type="range" id="v2" min="-3" max="3" step="0.01" value="0.5"></div>
+    <div class="cb-ends"><span>v₁ / v₂</span><span>drag the dot on the map too →</span></div>
+  </div>
+</div>
+
+<!-- ============ Panel C2: LASSO / soft-threshold regions ============ -->
+<div class="panel prox">
+  <div class="panel-title">Proximal Map &amp; Sparsity in 2D  (LASSO geometry)</div>
+  <div class="panel-subtitle">where prox<sub>λf</sub>(v) lands in the v-plane: ℓ₁ snaps coordinates to the axes / origin (sparsity); ℓ₂ only zeroes the whole vector</div>
+
+  <div class="legend">
+    <div class="legend-item"><div class="legend-line solid-g"></div>v → prox(v)</div>
+    <div class="legend-item"><div class="legend-line" style="background:rgba(251,191,36,0.7)"></div>both coords → 0 (fully sparse)</div>
+    <div class="legend-item"><div class="legend-line" style="background:rgba(251,191,36,0.3)"></div>one coord → 0 (on an axis)</div>
+  </div>
+
+  <canvas id="proxCanvas2" class="drag" role="img" aria-label="2D proximal / soft-threshold region map"></canvas>
+
+  <div class="stat-grid">
+    <div class="stat-row"><span class="param-name math-label">prox<sub>λf</sub>(v)</span><span class="param-value" id="proxPairVal">—</span></div>
+    <div class="stat-row"><span class="param-name math-label">‖v − x‖ shrinkage</span><span class="param-value" id="shrink2Val">—</span></div>
+    <div class="stat-row"><span class="param-name math-label">zero coordinates</span><span class="param-value" id="zeroCntVal">—</span></div>
+    <div class="stat-row"><span class="param-name math-label">sparse?</span><span class="param-value" id="sparse2Val">—</span></div>
+  </div>
+
+  <div id="sparseBadge2" class="badge off">prox(v) has no zero coordinate</div>
+
+  <div class="formula-box">
+    Block / coordinate soft-thresholding<br>
+    <code>ℓ₁:  prox<sub>λ‖·‖₁</sub>(v)ᵢ = sign(vᵢ)·max(|vᵢ| − λ, 0)</code> &nbsp;(per coordinate)<br>
+    <code>ℓ₂:  prox<sub>λ‖·‖₂</sub>(v) = max(1 − λ/‖v‖, 0)·v</code> &nbsp;(whole vector)<br>
+    <span style="font-size:0.72rem;">ℓ₁ has independent dead-zones per axis, so a coordinate hits exactly 0 whenever |vᵢ| ≤ λ — that is why LASSO produces sparse solutions on the axes. ℓ₂'s subdifferential at 0 is a round disk, so it can only kill the entire vector at once (‖v‖ ≤ λ): no per-coordinate sparsity.</span>
+  </div>
+</div>
+
+</div><!-- /dim2 -->
+
+<div class="copyright">© Designed by T.Tsukazaki 2026</div>
+
+<script>
+(function() {
+
+  function dpr() { return window.devicePixelRatio || 1; }
+
+  function setupCanvas(canvas) {
+    const rect = canvas.getBoundingClientRect();
+    const d = dpr();
+    canvas.width = rect.width * d;
+    canvas.height = rect.height * d;
+    const ctx = canvas.getContext('2d');
+    ctx.setTransform(d, 0, 0, d, 0, 0);
+    return { ctx, w: rect.width, h: rect.height };
+  }
+
+  function fmt(x) {
+    if (!isFinite(x)) return '∞';
+    if (Math.abs(x) >= 1000) return x.toExponential(1);
+    if (Math.abs(x) >= 100) return x.toFixed(1);
+    return x.toFixed(2);
+  }
+  function clamp(x, a, b) { return Math.min(b, Math.max(a, x)); }
+  function containsZero(lo, hi) { return lo <= 1e-9 && hi >= -1e-9; }   // 0 ∈ [lo,hi] ?
+
+  function drawArrow(ctx, x0, y0, x1, y1, color, width) {
+    ctx.save();
+    ctx.strokeStyle = color; ctx.fillStyle = color; ctx.lineWidth = width; ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x1, y1); ctx.stroke();
+    const ang = Math.atan2(y1 - y0, x1 - x0), hl = 8;
+    if (Math.hypot(x1 - x0, y1 - y0) > 3) {
+      ctx.beginPath();
+      ctx.moveTo(x1, y1);
+      ctx.lineTo(x1 - hl * Math.cos(ang - 0.4), y1 - hl * Math.sin(ang - 0.4));
+      ctx.lineTo(x1 - hl * Math.cos(ang + 0.4), y1 - hl * Math.sin(ang + 0.4));
+      ctx.closePath(); ctx.fill();
+    }
+    ctx.restore();
+  }
+
+  // prox_{λf}(v) = argmin_x f(x) + (x−v)²/(2λ)。凸なので三分探索で数値的に解く（汎用）。
+  function proxOf(F, v, lambda) {
+    if (lambda <= 1e-9) return v;
+    let a = -4, b = 4;
+    const h = x => F.f(x) + (x - v) * (x - v) / (2 * lambda);
+    for (let i = 0; i < 80; i++) {
+      const m1 = a + (b - a) / 3, m2 = b - (b - a) / 3;
+      if (h(m1) < h(m2)) b = m2; else a = m1;
+    }
+    return (a + b) / 2;
+  }
+
+  // ===========================================================
+  //  関数記述子: 各凸関数は f(x) と subdiff(x)=[lo,hi] を持つ。
+  //  パネルは記述子に対して汎用に描画する（個別関数をハードコードしない）。
+  //  domain は描画範囲。すべて [-3, 3] に統一。
+  // ===========================================================
+  const DOMAIN = [-3, 3];
+
+  // max_i(a_i x + b_i) の劣微分: アクティブな直線の傾きの凸包 = [min slope, max slope]
+  function maxlinSub(lines, x) {
+    let best = -Infinity;
+    for (const L of lines) best = Math.max(best, L.a * x + L.b);
+    let lo = Infinity, hi = -Infinity;
+    for (const L of lines) {
+      if (L.a * x + L.b >= best - 1e-9) { lo = Math.min(lo, L.a); hi = Math.max(hi, L.a); }
+    }
+    return [lo, hi];
+  }
+  function maxlinVal(lines, x) {
+    let best = -Infinity;
+    for (const L of lines) best = Math.max(best, L.a * x + L.b);
+    return best;
+  }
+
+  // max(|x|, 0.4) = max(-x, x, 0.4)
+  const MAXLIN = [{a: -1, b: 0}, {a: 0, b: 0.4}, {a: 1, b: 0}];
+
+  const FUNCS = {
+    abs: {
+      label: '|x|', domain: DOMAIN, kinks: [0],
+      f: x => Math.abs(x),
+      subdiff: x => x < -1e-9 ? [-1, -1] : x > 1e-9 ? [1, 1] : [-1, 1],
+    },
+    relu: {
+      label: 'max(0, x)', domain: DOMAIN, kinks: [0],
+      f: x => Math.max(0, x),
+      subdiff: x => x < -1e-9 ? [0, 0] : x > 1e-9 ? [1, 1] : [0, 1],
+    },
+    maxlin: {
+      label: 'max(|x|, 0.4)', domain: DOMAIN, kinks: [-0.4, 0.4],
+      f: x => maxlinVal(MAXLIN, x),
+      subdiff: x => maxlinSub(MAXLIN, x),
+    },
+    quad: {
+      label: '0.45·x²', domain: DOMAIN, kinks: [],
+      f: x => 0.45 * x * x,
+      subdiff: x => { const d = 0.9 * x; return [d, d]; },
+    },
+  };
+
+  // ===========================================================
+  //  2D 関数記述子。
+  //    f(p)            : p=[x1,x2] → 値
+  //    set(p)          : ∂f(p) を集合記述子で返す
+  //                      {type:'box', x:[lo,hi], y:[lo,hi]}
+  //                      {type:'disk', c:[cx,cy], r}
+  //                      {type:'point', p:[g1,g2]}
+  //    prox(v, lambda) : prox_{λf}(v)（閉形式）
+  // ===========================================================
+  const sub1 = t => t < -1e-9 ? [-1, -1] : t > 1e-9 ? [1, 1] : [-1, 1];   // ∂|t|
+  const soft = (v, l) => Math.sign(v) * Math.max(Math.abs(v) - l, 0);      // soft-threshold
+
+  const FUNCS2 = {
+    l1: {
+      label: '‖x‖₁',
+      f: p => Math.abs(p[0]) + Math.abs(p[1]),
+      set: p => ({ type: 'box', x: sub1(p[0]), y: sub1(p[1]) }),
+      prox: (v, l) => [soft(v[0], l), soft(v[1], l)],
+    },
+    l2: {
+      label: '‖x‖₂',
+      f: p => Math.hypot(p[0], p[1]),
+      set: p => {
+        const n = Math.hypot(p[0], p[1]);
+        return n < 1e-9 ? { type: 'disk', c: [0, 0], r: 1 } : { type: 'point', p: [p[0] / n, p[1] / n] };
+      },
+      prox: (v, l) => {
+        const n = Math.hypot(v[0], v[1]);
+        if (n < 1e-9) return [0, 0];
+        const s = Math.max(1 - l / n, 0);
+        return [v[0] * s, v[1] * s];
+      },
+    },
+  };
+
+  // --- 集合演算（劣微分集合に対して）---
+  function containsZeroSet(set) {
+    if (set.type === 'box') return containsZero(set.x[0], set.x[1]) && containsZero(set.y[0], set.y[1]);
+    if (set.type === 'disk') return Math.hypot(set.c[0], set.c[1]) <= set.r + 1e-9;
+    if (set.type === 'point') return Math.hypot(set.p[0], set.p[1]) < 1e-9;
+    return false;
+  }
+  // g を集合へ射影（クリックで g を選ぶときに使用）
+  function projectG(set, g) {
+    if (set.type === 'box') return [clamp(g[0], set.x[0], set.x[1]), clamp(g[1], set.y[0], set.y[1])];
+    if (set.type === 'point') return [set.p[0], set.p[1]];
+    if (set.type === 'disk') {
+      const dx = g[0] - set.c[0], dy = g[1] - set.c[1], n = Math.hypot(dx, dy);
+      if (n <= set.r) return [g[0], g[1]];
+      return [set.c[0] + dx / n * set.r, set.c[1] + dy / n * set.r];
+    }
+    return [0, 0];
+  }
+  function setLabel(set) {
+    if (set.type === 'box') {
+      const wx = set.x[1] - set.x[0], wy = set.y[1] - set.y[0];
+      if (wx < 1e-6 && wy < 1e-6) return 'point';
+      if (wx < 1e-6 || wy < 1e-6) return 'segment';
+      return 'box [−1,1]²';
+    }
+    if (set.type === 'disk') return 'disk ‖g‖≤' + fmt(set.r);
+    return 'point';
+  }
+
+  // ===========================================================
+  //  3D 直交投影（方位角 az・仰角 el）— エピグラフ描画用
+  // ===========================================================
+  const cam = { az: -0.7, el: 0.95 };
+  let projScale = 36, projCx = 0, projCy = 0;
+  function project(p) {
+    const ca = Math.cos(cam.az), sa = Math.sin(cam.az);
+    const x = p[0] * ca - p[1] * sa;
+    const y = p[0] * sa + p[1] * ca;
+    const ce = Math.cos(cam.el), se = Math.sin(cam.el);
+    const z2 = y * se + p[2] * ce;
+    return { sx: projCx + x * projScale, sy: projCy - z2 * projScale };
+  }
+
+  // ===========================================================
+  //  共有状態（単一の真実）。すべてのコントロール / パネルが参照。
+  //    example = 選択中の関数キー
+  //    x0      = 評価点
+  //    g       = 選択中の劣勾配（∂f(x0) 内にクランプ）
+  // ===========================================================
+  //    v       = prox の入力点（Panel C）
+  //    lambda  = 正則化の強さ（Panel C, 1D/2D 共有）
+  //    dim     = 1 | 2（次元モード）
+  //    例2D:  example2 / x0b=[x1,x2] / gb=[g1,g2] / vb=[v1,v2]
+  const S = {
+    dim: 1,
+    example: 'abs', x0: 0, g: 0, v: 1, lambda: 0.6,
+    example2: 'l1', x0b: [0, 0], gb: [0, 0], vb: [1, 0.5],
+  };
+
+  function curFunc() { return FUNCS[S.example]; }
+  function curFunc2() { return FUNCS2[S.example2]; }
+
+  // 妥当域の保証: x0 を domain に、g を ∂f(x0) にクランプ
+  function enforce() {
+    if (S.dim === 1) {
+      const F = curFunc();
+      S.x0 = clamp(S.x0, F.domain[0], F.domain[1]);
+      const [lo, hi] = F.subdiff(S.x0);
+      S.g = clamp(S.g, lo, hi);
+      S.v = clamp(S.v, F.domain[0], F.domain[1]);
+    } else {
+      const F = curFunc2();
+      S.x0b = [clamp(S.x0b[0], -3, 3), clamp(S.x0b[1], -3, 3)];
+      S.gb = projectG(F.set(S.x0b), S.gb);             // g を ∂f(x0) へ射影
+      S.vb = [clamp(S.vb[0], -3, 3), clamp(S.vb[1], -3, 3)];
+    }
+    S.lambda = clamp(S.lambda, 0, 3);
+  }
+
+  // kink は測度ゼロの1点なので自由ドラッグでは乗りにくい。
+  // 近傍に来たら磁気的にスナップして、∂f が区間になる点へ到達しやすくする。
+  const SNAP = 0.06;
+  function snapToKink(x) {
+    const F = curFunc();
+    let best = x, bd = SNAP;
+    for (const k of F.kinks) {
+      const d = Math.abs(x - k);
+      if (d < bd) { bd = d; best = k; }
+    }
+    return best;
+  }
+  function isAtKink(x) {
+    return curFunc().kinks.some(k => Math.abs(x - k) < 1e-9);
+  }
+
+  // ===========================================================
+  //  2D プロット用スケール
+  // ===========================================================
+  function makeScale(w, h, pad, xr, yr) {
+    const plotW = w - pad.l - pad.r, plotH = h - pad.t - pad.b;
+    const sx = x => pad.l + (x - xr[0]) / (xr[1] - xr[0]) * plotW;
+    const sy = y => pad.t + (yr[1] - y) / (yr[1] - yr[0]) * plotH;
+    return { sx, sy, plotW, plotH, xr, yr };
+  }
+
+  function drawGridAxes(ctx, sc, w, h) {
+    ctx.strokeStyle = '#1e1e2a'; ctx.lineWidth = 1; ctx.setLineDash([]);
+    for (let gx = Math.ceil(sc.xr[0]); gx <= sc.xr[1]; gx++) {
+      ctx.beginPath(); ctx.moveTo(sc.sx(gx), sc.sy(sc.yr[1])); ctx.lineTo(sc.sx(gx), sc.sy(sc.yr[0])); ctx.stroke();
+    }
+    for (let gy = Math.ceil(sc.yr[0]); gy <= sc.yr[1]; gy++) {
+      ctx.beginPath(); ctx.moveTo(sc.sx(sc.xr[0]), sc.sy(gy)); ctx.lineTo(sc.sx(sc.xr[1]), sc.sy(gy)); ctx.stroke();
+    }
+    // x / y 軸（0 のライン）を強調
+    ctx.strokeStyle = '#3a3850'; ctx.lineWidth = 1.2;
+    if (sc.yr[0] <= 0 && sc.yr[1] >= 0) {
+      ctx.beginPath(); ctx.moveTo(sc.sx(sc.xr[0]), sc.sy(0)); ctx.lineTo(sc.sx(sc.xr[1]), sc.sy(0)); ctx.stroke();
+    }
+    if (sc.xr[0] <= 0 && sc.xr[1] >= 0) {
+      ctx.beginPath(); ctx.moveTo(sc.sx(0), sc.sy(sc.yr[0])); ctx.lineTo(sc.sx(0), sc.sy(sc.yr[1])); ctx.stroke();
+    }
+  }
+
+  // ===========================================================
+  //  Panel A : 関数と支持直線
+  // ===========================================================
+  let primalGeo = null;   // x0 ドラッグ用に直近のスケールを保持
+
+  function renderPrimal() {
+    const canvas = document.getElementById('primalCanvas');
+    const { ctx, w, h } = setupCanvas(canvas);
+    ctx.clearRect(0, 0, w, h);
+    const F = curFunc();
+    const [xmin, xmax] = F.domain;
+
+    // f の値域から y レンジを決定
+    const N = 240;
+    let fmin = Infinity, fmax = -Infinity;
+    for (let i = 0; i <= N; i++) {
+      const x = xmin + (xmax - xmin) * i / N;
+      const v = F.f(x); fmin = Math.min(fmin, v); fmax = Math.max(fmax, v);
+    }
+    const span = Math.max(fmax - fmin, 1);
+    const yr = [Math.min(0, fmin) - 0.35 * span, fmax + 0.35 * span];
+    const pad = { l: 40, r: 16, t: 16, b: 26 };
+    const sc = makeScale(w, h, pad, [xmin, xmax], yr);
+    primalGeo = { xmin, xmax, l: pad.l, plotW: sc.plotW };
+
+    drawGridAxes(ctx, sc, w, h);
+    drawAxisTicks(ctx, sc, pad, h);
+
+    const x0 = S.x0, fx0 = F.f(x0);
+    const [lo, hi] = F.subdiff(x0);
+
+    // --- 支持直線の扇（lo→hi の傾きを数本）---
+    const nLines = (hi - lo) > 1e-6 ? 9 : 1;
+    for (let k = 0; k < nLines; k++) {
+      const g = nLines === 1 ? lo : lo + (hi - lo) * k / (nLines - 1);
+      const isEdge = (k === 0 || k === nLines - 1);
+      ctx.strokeStyle = isEdge ? 'rgba(167,139,250,0.85)' : 'rgba(167,139,250,0.28)';
+      ctx.lineWidth = isEdge ? 1.6 : 1;
+      ctx.setLineDash(isEdge ? [] : [4, 4]);
+      const y1 = fx0 + g * (xmin - x0), y2 = fx0 + g * (xmax - x0);
+      ctx.beginPath(); ctx.moveTo(sc.sx(xmin), sc.sy(y1)); ctx.lineTo(sc.sx(xmax), sc.sy(y2)); ctx.stroke();
+    }
+    ctx.setLineDash([]);
+
+    // --- 選択中の劣勾配 g の支持直線（強調）---
+    {
+      const g = S.g;
+      const y1 = fx0 + g * (xmin - x0), y2 = fx0 + g * (xmax - x0);
+      ctx.strokeStyle = '#f97316'; ctx.lineWidth = 2.4;
+      ctx.beginPath(); ctx.moveTo(sc.sx(xmin), sc.sy(y1)); ctx.lineTo(sc.sx(xmax), sc.sy(y2)); ctx.stroke();
+    }
+
+    // --- 関数曲線 f(x) ---
+    ctx.strokeStyle = '#e8e6f0'; ctx.lineWidth = 2.6; ctx.lineJoin = 'round';
+    ctx.beginPath();
+    for (let i = 0; i <= N; i++) {
+      const x = xmin + (xmax - xmin) * i / N;
+      const px = sc.sx(x), py = sc.sy(F.f(x));
+      if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+    }
+    ctx.stroke();
+
+    // --- kink マーカー（狙う場所を可視化。スナップと併用）---
+    F.kinks.forEach(k => {
+      const kx = sc.sx(k), ky = sc.sy(F.f(k));
+      ctx.strokeStyle = 'rgba(167,139,250,0.35)'; ctx.lineWidth = 1; ctx.setLineDash([3, 3]);
+      ctx.beginPath(); ctx.moveTo(kx, sc.sy(sc.yr[1])); ctx.lineTo(kx, sc.sy(sc.yr[0])); ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.beginPath(); ctx.arc(kx, ky, 4, 0, Math.PI * 2);
+      ctx.fillStyle = '#16161f'; ctx.fill();
+      ctx.strokeStyle = '#a78bfa'; ctx.lineWidth = 1.5; ctx.stroke();
+    });
+    if (F.kinks.length) {
+      ctx.fillStyle = 'rgba(167,139,250,0.6)'; ctx.font = '9px monospace';
+      ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
+      F.kinks.forEach(k => ctx.fillText('kink', sc.sx(k), sc.sy(sc.yr[1]) + 12));
+    }
+
+    // --- 評価点 (x0, f(x0)) ---
+    ctx.beginPath(); ctx.arc(sc.sx(x0), sc.sy(fx0), 5.5, 0, Math.PI * 2);
+    ctx.fillStyle = '#fbbf24'; ctx.fill();
+    ctx.strokeStyle = '#0d0d14'; ctx.lineWidth = 2; ctx.stroke();
+    ctx.fillStyle = '#fbbf24'; ctx.font = '11px "Courier New", monospace';
+    ctx.textAlign = 'left'; ctx.textBaseline = 'bottom';
+    ctx.fillText('x₀', sc.sx(x0) + 8, sc.sy(fx0) - 6);
+
+    // --- 数値 ---
+    document.getElementById('fx0Val').textContent = fmt(fx0);
+    document.getElementById('sdVal').textContent =
+      (hi - lo > 1e-6) ? `[${fmt(lo)}, ${fmt(hi)}]` : `{${fmt(lo)}}`;
+    document.getElementById('lrVal').textContent = `${fmt(lo)} / ${fmt(hi)}`;
+    document.getElementById('gShowVal').textContent = fmt(S.g);
+  }
+
+  function drawAxisTicks(ctx, sc, pad, h) {
+    ctx.fillStyle = '#3a3850'; ctx.font = '9px monospace';
+    ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+    for (let gx = Math.ceil(sc.xr[0]); gx <= sc.xr[1]; gx++) {
+      ctx.fillText(gx.toString(), sc.sx(gx), h - pad.b + 6);
+    }
+    ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+    for (let gy = Math.ceil(sc.yr[0]); gy <= sc.yr[1]; gy++) {
+      if (gy === 0) continue;
+      ctx.fillText(gy.toString(), pad.l - 6, sc.sy(gy));
+    }
+  }
+
+  // ===========================================================
+  //  Panel B : 劣微分写像 x ↦ ∂f(x) の graph
+  // ===========================================================
+  function renderSubmap() {
+    const canvas = document.getElementById('submapCanvas');
+    const { ctx, w, h } = setupCanvas(canvas);
+    ctx.clearRect(0, 0, w, h);
+    const F = curFunc();
+    const [xmin, xmax] = F.domain;
+
+    // g レンジ（劣微分の値域）を決定
+    const N = 600;
+    let gmin = Infinity, gmax = -Infinity;
+    for (let i = 0; i <= N; i++) {
+      const x = xmin + (xmax - xmin) * i / N;
+      const [lo, hi] = F.subdiff(x);
+      gmin = Math.min(gmin, lo); gmax = Math.max(gmax, hi);
+    }
+    const gspan = Math.max(gmax - gmin, 1);
+    const yr = [gmin - 0.25 * gspan, gmax + 0.25 * gspan];
+    const pad = { l: 40, r: 16, t: 16, b: 26 };
+    const sc = makeScale(w, h, pad, [xmin, xmax], yr);
+
+    drawGridAxes(ctx, sc, w, h);
+    drawAxisTicks(ctx, sc, pad, h);
+
+    // g = 0 のラインを強調（最小性の境界）
+    ctx.strokeStyle = 'rgba(249,115,22,0.5)'; ctx.lineWidth = 1.4; ctx.setLineDash([5, 4]);
+    ctx.beginPath(); ctx.moveTo(sc.sx(xmin), sc.sy(0)); ctx.lineTo(sc.sx(xmax), sc.sy(0)); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = 'rgba(249,115,22,0.7)'; ctx.font = '10px monospace';
+    ctx.textAlign = 'left'; ctx.textBaseline = 'bottom';
+    ctx.fillText('g = 0', sc.sx(xmin) + 4, sc.sy(0) - 3);
+
+    // 単調グラフを中点の折れ線で描く（kink ではほぼ垂直の接続 = ジャンプ）
+    ctx.strokeStyle = '#38bdf8'; ctx.lineWidth = 2.4; ctx.lineJoin = 'round';
+    ctx.beginPath();
+    for (let i = 0; i <= N; i++) {
+      const x = xmin + (xmax - xmin) * i / N;
+      const [lo, hi] = F.subdiff(x);
+      const mid = (lo + hi) / 2;
+      const px = sc.sx(x), py = sc.sy(mid);
+      if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+    }
+    ctx.stroke();
+
+    // 現在の x0 における ∂f(x0) を縦線分で強調
+    const [lo, hi] = F.subdiff(S.x0);
+    const px = sc.sx(S.x0);
+    // x0 の垂直ガイド
+    ctx.strokeStyle = '#2a2a3a'; ctx.lineWidth = 1; ctx.setLineDash([2, 3]);
+    ctx.beginPath(); ctx.moveTo(px, sc.sy(sc.yr[1])); ctx.lineTo(px, sc.sy(sc.yr[0])); ctx.stroke();
+    ctx.setLineDash([]);
+    // 区間そのもの
+    ctx.strokeStyle = '#f97316'; ctx.lineWidth = 4; ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.moveTo(px, sc.sy(lo)); ctx.lineTo(px, sc.sy(hi)); ctx.stroke();
+    ctx.lineCap = 'butt';
+    // 端点
+    for (const gv of [lo, hi]) {
+      ctx.beginPath(); ctx.arc(px, sc.sy(gv), 3.5, 0, Math.PI * 2);
+      ctx.fillStyle = '#fbbf24'; ctx.fill();
+    }
+    // 選択中 g のマーカー
+    ctx.beginPath(); ctx.arc(px, sc.sy(S.g), 4.5, 0, Math.PI * 2);
+    ctx.fillStyle = '#f97316'; ctx.fill();
+    ctx.strokeStyle = '#0d0d14'; ctx.lineWidth = 1.5; ctx.stroke();
+    ctx.fillStyle = '#f97316'; ctx.font = '11px "Courier New", monospace';
+    ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+    ctx.fillText('∂f(x₀)', px + 9, sc.sy((lo + hi) / 2));
+
+    // --- 数値 / 最適性 ---
+    const isOpt = (lo <= 1e-9 && hi >= -1e-9);
+    document.getElementById('x0Val').textContent = fmt(S.x0);
+    document.getElementById('widthVal').textContent = fmt(hi - lo);
+    document.getElementById('optVal').textContent = isOpt ? 'yes — 0 ∈ ∂f' : 'no';
+    const badge = document.getElementById('optBadge');
+    badge.className = 'badge ' + (isOpt ? 'on' : 'off');
+    badge.textContent = isOpt ? 'x₀ is a global minimizer  (0 ∈ ∂f(x₀))' : 'x₀ is not a minimizer';
+  }
+
+  // ===========================================================
+  //  Panel C : 近接作用素 prox_{λf} とスパース性
+  // ===========================================================
+  let proxGeo = null;
+
+  function renderProx() {
+    const canvas = document.getElementById('proxCanvas');
+    const { ctx, w, h } = setupCanvas(canvas);
+    ctx.clearRect(0, 0, w, h);
+    const F = curFunc();
+    const [xmin, xmax] = F.domain;
+    const pad = { l: 40, r: 16, t: 16, b: 26 };
+    const sc = makeScale(w, h, pad, [xmin, xmax], [xmin, xmax]);   // 入力 v × 出力 x、正方
+    proxGeo = { xmin, xmax, l: pad.l, plotW: sc.plotW };
+
+    // --- dead-zone（prox が最小点に張り付く v の帯）を塗る ---
+    const Nv = 360;
+    ctx.fillStyle = 'rgba(251,191,36,0.13)';
+    let inZone = false, startV = 0;
+    for (let i = 0; i <= Nv; i++) {
+      const v = xmin + (xmax - xmin) * i / Nv;
+      const cond = i < Nv ? containsZero(...F.subdiff(proxOf(F, v, S.lambda))) : false;
+      if (cond && !inZone) { inZone = true; startV = v; }
+      if ((!cond || i === Nv) && inZone) {
+        inZone = false;
+        ctx.fillRect(sc.sx(startV), sc.sy(sc.yr[1]), sc.sx(v) - sc.sx(startV), sc.plotH);
+      }
+    }
+
+    drawGridAxes(ctx, sc, w, h);
+    drawAxisTicks(ctx, sc, pad, h);
+
+    // --- 恒等線 y = v（縮小の基準）---
+    ctx.strokeStyle = '#3a3850'; ctx.lineWidth = 1.2; ctx.setLineDash([5, 4]);
+    ctx.beginPath(); ctx.moveTo(sc.sx(xmin), sc.sy(xmin)); ctx.lineTo(sc.sx(xmax), sc.sy(xmax)); ctx.stroke();
+    ctx.setLineDash([]);
+
+    // --- prox 曲線 ---
+    ctx.strokeStyle = '#fbbf24'; ctx.lineWidth = 2.6; ctx.lineJoin = 'round';
+    ctx.beginPath();
+    for (let i = 0; i <= Nv; i++) {
+      const v = xmin + (xmax - xmin) * i / Nv;
+      const px = sc.sx(v), py = sc.sy(proxOf(F, v, S.lambda));
+      if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+    }
+    ctx.stroke();
+
+    // --- 現在の v → prox(v) ---
+    const vp = S.v, xp = proxOf(F, vp, S.lambda);
+    // v の垂直ガイド
+    ctx.strokeStyle = '#2a2a3a'; ctx.lineWidth = 1; ctx.setLineDash([2, 3]);
+    ctx.beginPath(); ctx.moveTo(sc.sx(vp), sc.sy(sc.yr[1])); ctx.lineTo(sc.sx(vp), sc.sy(sc.yr[0])); ctx.stroke();
+    // 出力を y 軸へ水平ガイド
+    ctx.beginPath(); ctx.moveTo(sc.sx(vp), sc.sy(xp)); ctx.lineTo(sc.sx(xmin), sc.sy(xp)); ctx.stroke();
+    ctx.setLineDash([]);
+    // 縮小の矢印（恒等線 (v,v) → 曲線 (v,xp)）
+    if (Math.abs(vp - xp) > 1e-3) drawArrow(ctx, sc.sx(vp), sc.sy(vp), sc.sx(vp), sc.sy(xp), '#f97316', 1.6);
+    // 曲線上の点
+    ctx.beginPath(); ctx.arc(sc.sx(vp), sc.sy(xp), 5.5, 0, Math.PI * 2);
+    ctx.fillStyle = '#fbbf24'; ctx.fill();
+    ctx.strokeStyle = '#0d0d14'; ctx.lineWidth = 2; ctx.stroke();
+    ctx.fillStyle = '#fbbf24'; ctx.font = '11px "Courier New", monospace';
+    ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+    ctx.fillText('v', sc.sx(vp), sc.sy(sc.yr[0]) - 14);
+
+    // --- 数値 / 判定 ---
+    const sparse = containsZero(...F.subdiff(xp));
+    const isZero = Math.abs(xp) < 1e-3;
+    document.getElementById('proxVal').textContent = fmt(xp) + (isZero ? '  (= 0)' : '');
+    document.getElementById('shrinkVal').textContent = fmt(vp - xp);
+    if (S.lambda <= 1e-9) {
+      document.getElementById('relVal').textContent = '— (λ = 0)';
+    } else {
+      const s = (vp - xp) / S.lambda;
+      const [lo, hi] = F.subdiff(xp);
+      const ok = (s >= lo - 1e-3 && s <= hi + 1e-3);
+      document.getElementById('relVal').textContent = `${ok ? '✓' : '✗'} s = ${fmt(s)}`;
+    }
+    document.getElementById('sparseVal').textContent = sparse ? (isZero ? 'yes → 0' : 'yes') : 'no';
+    const badge = document.getElementById('sparseBadge');
+    badge.className = 'badge ' + (sparse ? 'on' : 'off');
+    badge.textContent = sparse
+      ? (isZero ? 'x = prox(v) = 0 exactly — sparse!' : 'x = prox(v) sits at a minimizer (0 ∈ ∂f)')
+      : 'x = prox(v) is not at a minimizer';
+  }
+
+  // ===========================================================
+  //  2D 用の正方スケール
+  // ===========================================================
+  function squareScale(w, h, pad, range) {
+    const plotW = w - pad.l - pad.r, plotH = h - pad.t - pad.b;
+    const size = Math.min(plotW, plotH);
+    const cx = pad.l + plotW / 2, cy = pad.t + plotH / 2;
+    const unit = size / (2 * range);
+    return { sx: g => cx + g * unit, sy: g => cy - g * unit, cx, cy, unit, range };
+  }
+  function drawPlaneAxes(ctx, sq, range, labels) {
+    ctx.strokeStyle = '#1e1e2a'; ctx.lineWidth = 1; ctx.setLineDash([]);
+    for (let k = Math.ceil(-range); k <= range; k++) {
+      ctx.beginPath(); ctx.moveTo(sq.sx(k), sq.sy(-range)); ctx.lineTo(sq.sx(k), sq.sy(range)); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(sq.sx(-range), sq.sy(k)); ctx.lineTo(sq.sx(range), sq.sy(k)); ctx.stroke();
+    }
+    ctx.strokeStyle = '#3a3850'; ctx.lineWidth = 1.2;
+    ctx.beginPath(); ctx.moveTo(sq.sx(-range), sq.sy(0)); ctx.lineTo(sq.sx(range), sq.sy(0)); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(sq.sx(0), sq.sy(-range)); ctx.lineTo(sq.sx(0), sq.sy(range)); ctx.stroke();
+    ctx.fillStyle = '#5a5870'; ctx.font = '11px monospace';
+    ctx.textAlign = 'right'; ctx.textBaseline = 'bottom'; ctx.fillText(labels[0], sq.sx(range) - 3, sq.sy(0) - 3);
+    ctx.textAlign = 'left'; ctx.textBaseline = 'top'; ctx.fillText(labels[1], sq.sx(0) + 4, sq.sy(range) + 2);
+  }
+
+  // ===========================================================
+  //  Panel A2 : エピグラフ曲面 + 支持超平面
+  // ===========================================================
+  function render2DPrimal() {
+    const canvas = document.getElementById('primalCanvas2');
+    const { ctx, w, h } = setupCanvas(canvas);
+    ctx.clearRect(0, 0, w, h);
+    const F = curFunc2();
+    const RNG = 2.6, GRID = 12, zS = 0.55;
+    projScale = Math.min(w, h) / 8;
+    projCx = w / 2; projCy = h * 0.64;
+    const wpt = (x1, x2) => [x1, x2, F.f([x1, x2]) * zS];
+
+    // --- 基底平面 z=0 のグリッド ---
+    ctx.strokeStyle = '#1e1e2a'; ctx.lineWidth = 1;
+    for (let k = -2; k <= 2; k++) {
+      let a = project([k, -RNG, 0]), b = project([k, RNG, 0]);
+      ctx.beginPath(); ctx.moveTo(a.sx, a.sy); ctx.lineTo(b.sx, b.sy); ctx.stroke();
+      a = project([-RNG, k, 0]); b = project([RNG, k, 0]);
+      ctx.beginPath(); ctx.moveTo(a.sx, a.sy); ctx.lineTo(b.sx, b.sy); ctx.stroke();
+    }
+    // 軸
+    [[ [0,0,0],[RNG+0.4,0,0],'x₁' ], [ [0,0,0],[0,RNG+0.4,0],'x₂' ]].forEach(ax => {
+      const a = project(ax[0]), b = project(ax[1]);
+      ctx.strokeStyle = '#4a4860'; ctx.lineWidth = 1.4;
+      ctx.beginPath(); ctx.moveTo(a.sx, a.sy); ctx.lineTo(b.sx, b.sy); ctx.stroke();
+      ctx.fillStyle = '#6a677a'; ctx.font = '11px "Courier New", monospace';
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(ax[2], b.sx, b.sy);
+    });
+
+    // --- 支持超平面 z = f(x0)+g·(x−x0)（曲面の前に薄く塗る）---
+    const x0 = S.x0b, g = S.gb, fx0 = F.f(x0);
+    const D = 1.5;
+    const planeZ = (x1, x2) => (fx0 + g[0] * (x1 - x0[0]) + g[1] * (x2 - x0[1])) * zS;
+    const c = [
+      project([x0[0] - D, x0[1] - D, planeZ(x0[0] - D, x0[1] - D)]),
+      project([x0[0] + D, x0[1] - D, planeZ(x0[0] + D, x0[1] - D)]),
+      project([x0[0] + D, x0[1] + D, planeZ(x0[0] + D, x0[1] + D)]),
+      project([x0[0] - D, x0[1] + D, planeZ(x0[0] - D, x0[1] + D)]),
+    ];
+    ctx.beginPath(); ctx.moveTo(c[0].sx, c[0].sy);
+    for (let i = 1; i < 4; i++) ctx.lineTo(c[i].sx, c[i].sy);
+    ctx.closePath();
+    ctx.fillStyle = 'rgba(167,139,250,0.16)'; ctx.fill();
+    ctx.strokeStyle = 'rgba(167,139,250,0.7)'; ctx.lineWidth = 1.2; ctx.stroke();
+
+    // --- 曲面ワイヤフレーム ---
+    ctx.strokeStyle = 'rgba(56,189,248,0.45)'; ctx.lineWidth = 1; ctx.lineJoin = 'round';
+    for (let i = 0; i <= GRID; i++) {
+      const x1 = -RNG + 2 * RNG * i / GRID;
+      ctx.beginPath();
+      for (let j = 0; j <= GRID; j++) {
+        const x2 = -RNG + 2 * RNG * j / GRID, p = project(wpt(x1, x2));
+        if (j === 0) ctx.moveTo(p.sx, p.sy); else ctx.lineTo(p.sx, p.sy);
+      }
+      ctx.stroke();
+    }
+    for (let j = 0; j <= GRID; j++) {
+      const x2 = -RNG + 2 * RNG * j / GRID;
+      ctx.beginPath();
+      for (let i = 0; i <= GRID; i++) {
+        const x1 = -RNG + 2 * RNG * i / GRID, p = project(wpt(x1, x2));
+        if (i === 0) ctx.moveTo(p.sx, p.sy); else ctx.lineTo(p.sx, p.sy);
+      }
+      ctx.stroke();
+    }
+
+    // --- 接点 (x0, f(x0)) と基底への垂線 ---
+    const cp = project([x0[0], x0[1], fx0 * zS]);
+    const base = project([x0[0], x0[1], 0]);
+    ctx.strokeStyle = 'rgba(251,191,36,0.5)'; ctx.lineWidth = 1; ctx.setLineDash([3, 3]);
+    ctx.beginPath(); ctx.moveTo(base.sx, base.sy); ctx.lineTo(cp.sx, cp.sy); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.beginPath(); ctx.arc(cp.sx, cp.sy, 5.5, 0, Math.PI * 2);
+    ctx.fillStyle = '#fbbf24'; ctx.fill();
+    ctx.strokeStyle = '#0d0d14'; ctx.lineWidth = 2; ctx.stroke();
+
+    // --- 数値 ---
+    const set = F.set(x0);
+    document.getElementById('fx0Val2').textContent = fmt(fx0);
+    document.getElementById('sdVal2').textContent = describeSet(set);
+    document.getElementById('gShowVal2').textContent = `(${fmt(g[0])}, ${fmt(g[1])})`;
+    document.getElementById('optVal2').textContent = containsZeroSet(set) ? 'yes' : 'no';
+  }
+
+  function describeSet(set) {
+    if (set.type === 'box') return `[${fmt(set.x[0])},${fmt(set.x[1])}]×[${fmt(set.y[0])},${fmt(set.y[1])}]`;
+    if (set.type === 'disk') return `‖g‖ ≤ ${fmt(set.r)}`;
+    return `{(${fmt(set.p[0])}, ${fmt(set.p[1])})}`;
+  }
+
+  // ===========================================================
+  //  Panel B2 : 勾配空間の劣微分集合 ∂f(x0) ⊂ ℝ²
+  // ===========================================================
+  let submapGeo2 = null;
+
+  function render2DSubmap() {
+    const canvas = document.getElementById('submapCanvas2');
+    const { ctx, w, h } = setupCanvas(canvas);
+    ctx.clearRect(0, 0, w, h);
+    const F = curFunc2();
+    const RNG = 1.6;
+    const pad = { l: 30, r: 16, t: 16, b: 24 };
+    const sq = squareScale(w, h, pad, RNG);
+    submapGeo2 = sq;
+
+    drawPlaneAxes(ctx, sq, RNG, ['g₁', 'g₂']);
+
+    const set = F.set(S.x0b);
+    ctx.fillStyle = 'rgba(56,189,248,0.16)'; ctx.strokeStyle = '#38bdf8'; ctx.lineWidth = 2.4;
+    if (set.type === 'box') {
+      const x0 = sq.sx(set.x[0]), x1 = sq.sx(set.x[1]);
+      const y0 = sq.sy(set.y[1]), y1 = sq.sy(set.y[0]);   // sy 反転
+      const wpx = x1 - x0, hpx = y1 - y0;
+      if (Math.abs(wpx) < 2 && Math.abs(hpx) < 2) {
+        ctx.beginPath(); ctx.arc(sq.sx(set.x[0]), sq.sy(set.y[0]), 5, 0, Math.PI * 2); ctx.fillStyle = '#38bdf8'; ctx.fill();
+      } else if (Math.abs(wpx) < 2 || Math.abs(hpx) < 2) {
+        ctx.lineCap = 'round';
+        ctx.beginPath(); ctx.moveTo(sq.sx(set.x[0]), sq.sy(set.y[0])); ctx.lineTo(sq.sx(set.x[1]), sq.sy(set.y[1])); ctx.stroke();
+        ctx.lineCap = 'butt';
+      } else {
+        ctx.fillRect(x0, y0, wpx, hpx); ctx.strokeRect(x0, y0, wpx, hpx);
+      }
+    } else if (set.type === 'disk') {
+      ctx.beginPath(); ctx.arc(sq.sx(set.c[0]), sq.sy(set.c[1]), set.r * sq.unit, 0, Math.PI * 2);
+      ctx.fill(); ctx.stroke();
+    } else if (set.type === 'point') {
+      ctx.beginPath(); ctx.arc(sq.sx(set.p[0]), sq.sy(set.p[1]), 5, 0, Math.PI * 2); ctx.fillStyle = '#38bdf8'; ctx.fill();
+    }
+
+    // 原点（0 ∈ ∂f か視認）
+    const inZero = containsZeroSet(set);
+    ctx.beginPath(); ctx.arc(sq.sx(0), sq.sy(0), 4, 0, Math.PI * 2);
+    ctx.fillStyle = inZero ? '#f97316' : '#5a5870'; ctx.fill();
+    ctx.strokeStyle = '#0d0d14'; ctx.lineWidth = 1.5; ctx.stroke();
+    ctx.fillStyle = inZero ? '#f97316' : '#5a5870'; ctx.font = '10px monospace';
+    ctx.textAlign = 'left'; ctx.textBaseline = 'top'; ctx.fillText('0', sq.sx(0) + 6, sq.sy(0) + 4);
+
+    // 選択中 g
+    ctx.beginPath(); ctx.arc(sq.sx(S.gb[0]), sq.sy(S.gb[1]), 5.5, 0, Math.PI * 2);
+    ctx.fillStyle = '#fbbf24'; ctx.fill(); ctx.strokeStyle = '#0d0d14'; ctx.lineWidth = 2; ctx.stroke();
+
+    document.getElementById('x0Val2').textContent = `(${fmt(S.x0b[0])}, ${fmt(S.x0b[1])})`;
+    document.getElementById('typeVal2').textContent = setLabel(set);
+    document.getElementById('gPairVal2').textContent = `(${fmt(S.gb[0])}, ${fmt(S.gb[1])})`;
+    document.getElementById('optVal2b').textContent = inZero ? 'yes — 0 ∈ ∂f' : 'no';
+    const badge = document.getElementById('optBadge2');
+    badge.className = 'badge ' + (inZero ? 'on' : 'off');
+    badge.textContent = inZero ? 'x₀ is a global minimizer  (0 ∈ ∂f(x₀))' : 'x₀ is not a minimizer';
+  }
+
+  // ===========================================================
+  //  Panel C2 : 2D prox / soft-threshold 領域（LASSO）
+  // ===========================================================
+  let proxGeo2 = null;
+
+  function render2DProx() {
+    const canvas = document.getElementById('proxCanvas2');
+    const { ctx, w, h } = setupCanvas(canvas);
+    ctx.clearRect(0, 0, w, h);
+    const F = curFunc2();
+    const RNG = 3, lam = S.lambda;
+    const pad = { l: 30, r: 16, t: 16, b: 24 };
+    const sq = squareScale(w, h, pad, RNG);
+    proxGeo2 = sq;
+
+    // --- スパース領域の塗り ---
+    if (S.example2 === 'l1' && lam > 1e-9) {
+      const L = Math.min(lam, RNG);
+      // 片方のみ 0（薄）: |v1|<=λ の縦帯 / |v2|<=λ の横帯
+      ctx.fillStyle = 'rgba(251,191,36,0.12)';
+      ctx.fillRect(sq.sx(-L), sq.sy(RNG), sq.sx(L) - sq.sx(-L), sq.sy(-RNG) - sq.sy(RNG));   // 縦帯
+      ctx.fillRect(sq.sx(-RNG), sq.sy(L), sq.sx(RNG) - sq.sx(-RNG), sq.sy(-L) - sq.sy(L));     // 横帯
+      // 両方 0（濃）: 中央 [−λ,λ]²
+      ctx.fillStyle = 'rgba(251,191,36,0.30)';
+      ctx.fillRect(sq.sx(-L), sq.sy(L), sq.sx(L) - sq.sx(-L), sq.sy(-L) - sq.sy(L));
+    } else if (S.example2 === 'l2' && lam > 1e-9) {
+      ctx.beginPath(); ctx.arc(sq.sx(0), sq.sy(0), Math.min(lam, RNG) * sq.unit, 0, Math.PI * 2);
+      ctx.fillStyle = 'rgba(251,191,36,0.30)'; ctx.fill();
+    }
+
+    drawPlaneAxes(ctx, sq, RNG, ['v₁', 'v₂']);
+
+    // --- v → prox(v) ---
+    const v = S.vb, x = F.prox(v, lam);
+    if (Math.hypot(v[0] - x[0], v[1] - x[1]) > 1e-3)
+      drawArrow(ctx, sq.sx(v[0]), sq.sy(v[1]), sq.sx(x[0]), sq.sy(x[1]), '#f97316', 1.8);
+    // v（入力）
+    ctx.beginPath(); ctx.arc(sq.sx(v[0]), sq.sy(v[1]), 5, 0, Math.PI * 2);
+    ctx.fillStyle = '#e8e6f0'; ctx.fill(); ctx.strokeStyle = '#0d0d14'; ctx.lineWidth = 1.5; ctx.stroke();
+    ctx.fillStyle = '#e8e6f0'; ctx.font = '10px monospace'; ctx.textAlign = 'left'; ctx.textBaseline = 'bottom';
+    ctx.fillText('v', sq.sx(v[0]) + 7, sq.sy(v[1]) - 5);
+    // prox（出力）
+    ctx.beginPath(); ctx.arc(sq.sx(x[0]), sq.sy(x[1]), 6, 0, Math.PI * 2);
+    ctx.fillStyle = '#fbbf24'; ctx.fill(); ctx.strokeStyle = '#0d0d14'; ctx.lineWidth = 2; ctx.stroke();
+
+    // --- 数値 / スパース判定 ---
+    const zeros = (Math.abs(x[0]) < 1e-6 ? 1 : 0) + (Math.abs(x[1]) < 1e-6 ? 1 : 0);
+    document.getElementById('proxPairVal').textContent = `(${fmt(x[0])}, ${fmt(x[1])})`;
+    document.getElementById('shrink2Val').textContent = fmt(Math.hypot(v[0] - x[0], v[1] - x[1]));
+    document.getElementById('zeroCntVal').textContent = `${zeros} / 2`;
+    document.getElementById('sparse2Val').textContent = zeros > 0 ? 'yes' : 'no';
+    const badge = document.getElementById('sparseBadge2');
+    badge.className = 'badge ' + (zeros > 0 ? 'on' : 'off');
+    badge.textContent = zeros === 2 ? 'prox(v) = 0 — fully sparse'
+      : zeros === 1 ? 'prox(v) lands on an axis — one coordinate is exactly 0'
+      : 'prox(v) has no zero coordinate';
+  }
+
+  // ===========================================================
+  //  コントロール同期 / レンダリング
+  // ===========================================================
+  function setFill(fillId, val, min, max) {
+    const el = document.getElementById(fillId);
+    el.style.width = clamp((val - min) / (max - min), 0, 1) * 100 + '%';
+  }
+
+  function syncControls() {
+    if (S.dim === 2) { syncControls2(); return; }
+    const F = curFunc();
+    // 関数セレクタ
+    document.querySelectorAll('#exampleSeg button').forEach(b =>
+      b.classList.toggle('active', b.dataset.ex === S.example));
+
+    // x0
+    document.getElementById('x0').value = S.x0;
+    setFill('fill_x0', S.x0, F.domain[0], F.domain[1]);
+    const x0El = document.getElementById('val_x0');
+    const atKink = isAtKink(S.x0);
+    x0El.textContent = S.x0.toFixed(2) + (atKink ? ' ●' : '');
+    x0El.style.color = atKink ? '#a78bfa' : '';
+
+    // g（範囲は ∂f(x0)）。点なら無効化。
+    const [lo, hi] = F.subdiff(S.x0);
+    const gEl = document.getElementById('g');
+    const pointVal = (hi - lo) < 1e-6;
+    if (pointVal) {
+      gEl.min = (lo - 1).toString(); gEl.max = (lo + 1).toString();
+      gEl.value = lo; gEl.disabled = true;
+      setFill('fill_g', 0.5, 0, 1);
+    } else {
+      gEl.min = lo.toString(); gEl.max = hi.toString();
+      gEl.value = S.g; gEl.disabled = false;
+      setFill('fill_g', S.g, lo, hi);
+    }
+    document.getElementById('val_g').textContent = S.g.toFixed(2);
+    document.getElementById('g_lo').textContent = 'f′₋ = ' + fmt(lo);
+    document.getElementById('g_hi').textContent = 'f′₊ = ' + fmt(hi);
+
+    // λ / v（Panel C）
+    document.getElementById('lam').value = S.lambda;
+    setFill('fill_lam', S.lambda, 0, 3);
+    document.getElementById('val_lam').textContent = S.lambda.toFixed(2);
+    document.getElementById('vin').value = S.v;
+    setFill('fill_vin', S.v, F.domain[0], F.domain[1]);
+    document.getElementById('val_vin').textContent = S.v.toFixed(2);
+  }
+
+  function syncControls2() {
+    document.querySelectorAll('#exampleSeg2 button').forEach(b =>
+      b.classList.toggle('active', b.dataset.ex === S.example2));
+    document.getElementById('x1').value = S.x0b[0]; setFill('fill_x1', S.x0b[0], -3, 3);
+    document.getElementById('x2').value = S.x0b[1]; setFill('fill_x2', S.x0b[1], -3, 3);
+    document.getElementById('val_x1').textContent = S.x0b[0].toFixed(2);
+    document.getElementById('val_x2').textContent = S.x0b[1].toFixed(2);
+    document.getElementById('lam2').value = S.lambda; setFill('fill_lam2', S.lambda, 0, 3);
+    document.getElementById('val_lam2').textContent = S.lambda.toFixed(2);
+    document.getElementById('v1').value = S.vb[0]; setFill('fill_v1', S.vb[0], -3, 3);
+    document.getElementById('v2').value = S.vb[1]; setFill('fill_v2', S.vb[1], -3, 3);
+    document.getElementById('val_vpair').textContent = `(${S.vb[0].toFixed(1)}, ${S.vb[1].toFixed(1)})`;
+  }
+
+  function renderAll() {
+    if (S.dim === 1) { renderPrimal(); renderSubmap(); renderProx(); }
+    else { render2DPrimal(); render2DSubmap(); render2DProx(); }
+  }
+  function commit() { enforce(); syncControls(); renderAll(); }
+
+  // ===========================================================
+  //  初期化
+  // ===========================================================
+  function init() {
+    // 関数セレクタ
+    document.querySelectorAll('#exampleSeg button').forEach(b =>
+      b.addEventListener('click', () => {
+        S.example = b.dataset.ex;
+        // 新しい関数の ∂f(x0) の中点へ g を寄せる
+        const [lo, hi] = FUNCS[S.example].subdiff(S.x0);
+        S.g = (lo + hi) / 2;
+        commit();
+      }));
+
+    // x0 スライダー（kink 近傍はスナップ）
+    document.getElementById('x0').addEventListener('input', e => {
+      S.x0 = snapToKink(parseFloat(e.target.value)); commit();
+    });
+
+    // g スライダー
+    document.getElementById('g').addEventListener('input', e => {
+      S.g = parseFloat(e.target.value); commit();
+    });
+
+    // Panel A: 曲線上のドラッグで x0 を設定
+    const pc = document.getElementById('primalCanvas');
+    let dragging = false;
+    function setX0FromEvent(e) {
+      if (!primalGeo) return;
+      const rect = pc.getBoundingClientRect();
+      const t = (e.clientX - rect.left - primalGeo.l) / primalGeo.plotW;
+      const raw = clamp(primalGeo.xmin + t * (primalGeo.xmax - primalGeo.xmin), primalGeo.xmin, primalGeo.xmax);
+      S.x0 = snapToKink(raw);
+      commit();
+    }
+    pc.addEventListener('pointerdown', e => { dragging = true; pc.setPointerCapture(e.pointerId); setX0FromEvent(e); });
+    pc.addEventListener('pointermove', e => { if (dragging) setX0FromEvent(e); });
+    pc.addEventListener('pointerup', () => { dragging = false; });
+    pc.addEventListener('pointercancel', () => { dragging = false; });
+
+    // λ / v スライダー（Panel C）
+    document.getElementById('lam').addEventListener('input', e => {
+      S.lambda = parseFloat(e.target.value); commit();
+    });
+    document.getElementById('vin').addEventListener('input', e => {
+      S.v = parseFloat(e.target.value); commit();
+    });
+
+    // Panel C: 曲線上のドラッグで v を設定
+    const xc = document.getElementById('proxCanvas');
+    let cdrag = false;
+    function setVFromEvent(e) {
+      if (!proxGeo) return;
+      const rect = xc.getBoundingClientRect();
+      const t = (e.clientX - rect.left - proxGeo.l) / proxGeo.plotW;
+      S.v = clamp(proxGeo.xmin + t * (proxGeo.xmax - proxGeo.xmin), proxGeo.xmin, proxGeo.xmax);
+      commit();
+    }
+    xc.addEventListener('pointerdown', e => { cdrag = true; xc.setPointerCapture(e.pointerId); setVFromEvent(e); });
+    xc.addEventListener('pointermove', e => { if (cdrag) setVFromEvent(e); });
+    xc.addEventListener('pointerup', () => { cdrag = false; });
+    xc.addEventListener('pointercancel', () => { cdrag = false; });
+
+    // -------- 次元トグル（1D / 2D）--------
+    document.querySelectorAll('#dimToggle button').forEach(b =>
+      b.addEventListener('click', () => {
+        S.dim = parseInt(b.dataset.dim, 10);
+        document.body.className = S.dim === 1 ? 'mode1' : 'mode2';
+        document.querySelectorAll('#dimToggle button').forEach(x =>
+          x.classList.toggle('active', x.dataset.dim === b.dataset.dim));
+        commit();
+      }));
+
+    // -------- 2D 関数セレクタ --------
+    document.querySelectorAll('#exampleSeg2 button').forEach(b =>
+      b.addEventListener('click', () => {
+        S.example2 = b.dataset.ex;
+        S.gb = projectG(FUNCS2[S.example2].set(S.x0b), S.gb);
+        commit();
+      }));
+
+    // -------- 2D スライダー（x1, x2, λ, v1, v2）--------
+    document.getElementById('x1').addEventListener('input', e => { S.x0b = [parseFloat(e.target.value), S.x0b[1]]; commit(); });
+    document.getElementById('x2').addEventListener('input', e => { S.x0b = [S.x0b[0], parseFloat(e.target.value)]; commit(); });
+    document.getElementById('lam2').addEventListener('input', e => { S.lambda = parseFloat(e.target.value); commit(); });
+    document.getElementById('v1').addEventListener('input', e => { S.vb = [parseFloat(e.target.value), S.vb[1]]; commit(); });
+    document.getElementById('v2').addEventListener('input', e => { S.vb = [S.vb[0], parseFloat(e.target.value)]; commit(); });
+
+    // -------- Panel A2: ドラッグで回転 --------
+    const pc2 = document.getElementById('primalCanvas2');
+    let rdrag = false, lastX = 0, lastY = 0;
+    pc2.addEventListener('pointerdown', e => { rdrag = true; lastX = e.clientX; lastY = e.clientY; pc2.setPointerCapture(e.pointerId); });
+    pc2.addEventListener('pointermove', e => {
+      if (!rdrag) return;
+      cam.az += (e.clientX - lastX) * 0.01;
+      cam.el = clamp(cam.el + (e.clientY - lastY) * 0.01, 0.15, 1.5);
+      lastX = e.clientX; lastY = e.clientY;
+      render2DPrimal();
+    });
+    pc2.addEventListener('pointerup', () => { rdrag = false; });
+    pc2.addEventListener('pointercancel', () => { rdrag = false; });
+
+    // -------- Panel B2: クリックで g を選ぶ（集合へ射影）--------
+    const sm2 = document.getElementById('submapCanvas2');
+    let gdrag = false;
+    function setGFromEvent(e) {
+      if (!submapGeo2) return;
+      const rect = sm2.getBoundingClientRect();
+      const g0 = (e.clientX - rect.left - submapGeo2.cx) / submapGeo2.unit;
+      const g1 = -(e.clientY - rect.top - submapGeo2.cy) / submapGeo2.unit;
+      S.gb = projectG(curFunc2().set(S.x0b), [g0, g1]);
+      commit();
+    }
+    sm2.addEventListener('pointerdown', e => { gdrag = true; sm2.setPointerCapture(e.pointerId); setGFromEvent(e); });
+    sm2.addEventListener('pointermove', e => { if (gdrag) setGFromEvent(e); });
+    sm2.addEventListener('pointerup', () => { gdrag = false; });
+    sm2.addEventListener('pointercancel', () => { gdrag = false; });
+
+    // -------- Panel C2: クリック/ドラッグで v を選ぶ --------
+    const xc2 = document.getElementById('proxCanvas2');
+    let vdrag = false;
+    function setV2FromEvent(e) {
+      if (!proxGeo2) return;
+      const rect = xc2.getBoundingClientRect();
+      const v0 = clamp((e.clientX - rect.left - proxGeo2.cx) / proxGeo2.unit, -3, 3);
+      const v1 = clamp(-(e.clientY - rect.top - proxGeo2.cy) / proxGeo2.unit, -3, 3);
+      S.vb = [v0, v1];
+      commit();
+    }
+    xc2.addEventListener('pointerdown', e => { vdrag = true; xc2.setPointerCapture(e.pointerId); setV2FromEvent(e); });
+    xc2.addEventListener('pointermove', e => { if (vdrag) setV2FromEvent(e); });
+    xc2.addEventListener('pointerup', () => { vdrag = false; });
+    xc2.addEventListener('pointercancel', () => { vdrag = false; });
+
+    document.body.className = 'mode1';
+    commit();
+    window.addEventListener('resize', renderAll);
+  }
+
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
+  else init();
+
+})();
+</script>
+</body>
+</html>
