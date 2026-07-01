@@ -1,0 +1,1715 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>State Space Models Visualizer — Kalman Filter</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'Helvetica Neue', 'Hiragino Sans', 'Hiragino Kaku Gothic ProN', 'Yu Gothic', sans-serif;
+    background: #0d0d14;
+    color: #e8e6f0;
+    min-height: 100vh;
+    padding: 2rem;
+  }
+
+  h1 {
+    font-size: 1.1rem;
+    font-weight: 400;
+    color: #9b96c0;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    margin-bottom: 0.25rem;
+  }
+  h2 {
+    font-size: 2rem;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    margin-bottom: 0.4rem;
+  }
+  .title-disclaimer {
+    font-size: 0.72rem;
+    color: #5a5870;
+    margin-bottom: 1.5rem;
+    line-height: 1.6;
+  }
+
+  .data-selector {
+    background: #16161f;
+    border: 1px solid #2a2a3a;
+    border-radius: 12px;
+    padding: 1.25rem 1.5rem;
+    margin-bottom: 1.5rem;
+    display: flex;
+    align-items: flex-start;
+    gap: 2.5rem;
+    flex-wrap: wrap;
+  }
+  .cb-item { display: flex; flex-direction: column; gap: 0.45rem; min-width: 260px; flex: 1; }
+  .cb-head { display: flex; justify-content: space-between; align-items: baseline; gap: 1rem; }
+  .cb-item label {
+    font-size: 0.8rem;
+    letter-spacing: 0.05em;
+    color: #9b96c0;
+    font-weight: 500;
+  }
+  .cb-val { color: #fbbf24; }
+  .cb-ends { display: flex; justify-content: space-between; font-size: 0.68rem; color: #3a3850; margin-top: 2px; }
+
+  /* segmented control for picking the example function */
+  .seg { display: flex; flex-wrap: wrap; gap: 0.4rem; }
+  .seg button {
+    font-family: inherit;
+    font-size: 0.8rem;
+    color: #9b96c0;
+    background: #0d0d14;
+    border: 1px solid #2a2a3a;
+    border-radius: 8px;
+    padding: 0.5rem 0.85rem;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .seg button:hover { border-color: #4a4860; color: #c8c4e0; }
+  .seg button.active {
+    color: #0d0d14;
+    background: #a78bfa;
+    border-color: #a78bfa;
+    font-weight: 700;
+  }
+
+  /* dimension mode toggle (1D / 2D) */
+  .dim-toggle { display: flex; gap: 0.5rem; margin-bottom: 1.5rem; }
+  .dim-toggle button {
+    font-family: inherit;
+    font-size: 0.85rem;
+    letter-spacing: 0.05em;
+    color: #9b96c0;
+    background: #16161f;
+    border: 1px solid #2a2a3a;
+    border-radius: 10px;
+    padding: 0.6rem 1.4rem;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .dim-toggle button:hover { border-color: #4a4860; }
+  .dim-toggle button.active {
+    color: #0d0d14;
+    background: linear-gradient(90deg, #6c63e0, #a78bfa);
+    border-color: #a78bfa;
+    font-weight: 700;
+  }
+  body.mode1 .dim2 { display: none; }
+  body.mode2 .dim1 { display: none; }
+
+  .grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1.5rem;
+    margin-bottom: 1.5rem;
+  }
+
+  .panel {
+    background: #16161f;
+    border: 1px solid #2a2a3a;
+    border-radius: 16px;
+    padding: 1.75rem;
+    position: relative;
+    overflow: hidden;
+    margin-bottom: 1.5rem;
+  }
+  .panel::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 2px;
+    border-radius: 16px 16px 0 0;
+  }
+  .panel.primal::before { background: linear-gradient(90deg, #6c63e0, #a78bfa); }
+  .panel.submap::before { background: linear-gradient(90deg, #0ea5e9, #38bdf8); }
+  .panel.prox::before   { background: linear-gradient(90deg, #d97706, #fbbf24); }
+
+  .panel-title {
+    font-size: 1.3rem;
+    font-weight: 700;
+    margin-bottom: 0.25rem;
+    letter-spacing: -0.01em;
+  }
+  .panel.primal .panel-title { color: #a78bfa; }
+  .panel.submap .panel-title { color: #38bdf8; }
+  .panel.prox   .panel-title { color: #fbbf24; }
+
+  .panel-subtitle {
+    font-size: 0.8rem;
+    color: #5a5870;
+    margin-bottom: 1.5rem;
+    letter-spacing: 0.05em;
+  }
+
+  .legend {
+    display: flex;
+    gap: 1.2rem;
+    font-size: 0.75rem;
+    color: #6a677a;
+    margin-bottom: 1rem;
+    margin-top: -0.5rem;
+    flex-wrap: wrap;
+  }
+  .legend-item { display: flex; align-items: center; gap: 0.5rem; }
+  .legend-line { width: 20px; height: 2px; }
+  .legend-line.solid-f  { background: #e8e6f0; }
+  .legend-line.solid-s  { background: #a78bfa; }
+  .legend-line.solid-g  { background: #f97316; }
+  .legend-line.solid-c  { background: #38bdf8; }
+
+  canvas {
+    width: 100%;
+    height: 300px;
+    display: block;
+    border-radius: 8px;
+    background: #0d0d14;
+    margin-bottom: 1.5rem;
+  }
+  canvas.drag { cursor: ew-resize; }
+
+  .formula-box {
+    margin-top: 1.5rem;
+    padding: 0.9rem 1.1rem;
+    background: #0d0d14;
+    border: 1px solid #2a2a3a;
+    border-radius: 8px;
+    font-size: 0.78rem;
+    color: #5a5870;
+    line-height: 1.7;
+  }
+  .formula-box code { font-family: 'Courier New', monospace; font-size: 0.82rem; }
+
+  /* collapsible "how to read this panel" explainer */
+  .explain {
+    margin-top: 1rem;
+    border: 1px solid #2a2a3a;
+    border-radius: 8px;
+    background: #0d0d14;
+    overflow: hidden;
+  }
+  .explain > summary {
+    cursor: pointer;
+    padding: 0.7rem 1.1rem;
+    font-size: 0.8rem;
+    color: #9b96c0;
+    letter-spacing: 0.04em;
+    list-style: none;
+    user-select: none;
+  }
+  .explain > summary::-webkit-details-marker { display: none; }
+  .explain > summary::before { content: '▸ '; color: #fbbf24; }
+  .explain[open] > summary::before { content: '▾ '; }
+  .explain .explain-body {
+    padding: 0 1.1rem 1rem;
+    font-size: 0.78rem;
+    color: #8a87a0;
+    line-height: 1.7;
+  }
+  .explain .explain-body h4 {
+    color: #9b96c0;
+    font-size: 0.78rem;
+    margin: 0.9rem 0 0.3rem;
+    letter-spacing: 0.04em;
+  }
+  .explain .explain-body code { font-family: 'Courier New', monospace; color: #fbbf24; }
+  .explain .explain-body ul { margin: 0.3rem 0 0.3rem 1.1rem; }
+  .explain .explain-body li { margin-bottom: 0.3rem; }
+  .explain .explain-body .ekey { color: #fbbf24; font-weight: 700; }
+  .panel.primal .formula-box code { color: #a78bfa; }
+  .panel.submap .formula-box code { color: #38bdf8; }
+  .panel.prox   .formula-box code { color: #fbbf24; }
+
+  .param-name {
+    font-size: 0.8rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: #6a677a;
+    font-weight: 500;
+  }
+  .param-value {
+    font-size: 1rem;
+    font-weight: 700;
+    font-family: 'Courier New', monospace;
+  }
+  .panel.primal .param-value { color: #a78bfa; }
+  .panel.submap .param-value { color: #38bdf8; }
+  .panel.prox   .param-value { color: #fbbf24; }
+  /* math labels must not be uppercased (β → "B") */
+  .math-label { text-transform: none; letter-spacing: 0.02em; }
+
+  .stat-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 0.6rem 1.5rem;
+    margin-top: 0.5rem;
+  }
+  .stat-row { display: flex; justify-content: space-between; align-items: baseline; }
+
+  .slider-wrap {
+    position: relative;
+    height: 4px;
+    background: #2a2a3a;
+    border-radius: 2px;
+    margin: 8px 0;
+  }
+  .slider-fill {
+    position: absolute;
+    left: 0; top: 0; bottom: 0;
+    border-radius: 2px;
+    pointer-events: none;
+    background: linear-gradient(90deg, #6c63e0, #a78bfa);
+  }
+  .data-selector .slider-fill { background: linear-gradient(90deg, #d97706, #fbbf24); }
+
+  input[type=range] {
+    -webkit-appearance: none;
+    appearance: none;
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    left: 0; right: 0;
+    width: 100%;
+    height: 4px;
+    background: transparent;
+    cursor: pointer;
+    margin: 0;
+  }
+  input[type=range]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 18px; height: 18px;
+    border-radius: 50%;
+    background: #e8e6f0;
+    border: 2px solid #2a2a3a;
+    box-shadow: 0 0 0 3px rgba(167,139,250,0.2);
+    cursor: pointer;
+    transition: box-shadow 0.15s;
+  }
+  input[type=range]:hover::-webkit-slider-thumb { box-shadow: 0 0 0 5px rgba(167,139,250,0.3); }
+  input[type=range]:disabled { opacity: 0.4; cursor: not-allowed; }
+  input[type=range]:disabled::-webkit-slider-thumb { cursor: not-allowed; }
+
+  .badge {
+    display: inline-block;
+    margin-top: 0.6rem;
+    padding: 0.35rem 0.7rem;
+    border-radius: 6px;
+    font-size: 0.75rem;
+    font-weight: 700;
+    letter-spacing: 0.03em;
+  }
+  .badge.on  { background: rgba(249,115,22,0.18); color: #f97316; border: 1px solid rgba(249,115,22,0.4); }
+  .badge.off { background: #0d0d14; color: #5a5870; border: 1px solid #2a2a3a; }
+
+  @media (max-width: 900px) {
+    .grid { grid-template-columns: 1fr; }
+    h2 { font-size: 1.5rem; }
+    .cb-item { min-width: 100%; }
+  }
+
+  .copyright {
+    position: fixed;
+    bottom: 10px;
+    right: 14px;
+    font-size: 0.65rem;
+    color: #3a3850;
+    letter-spacing: 0.04em;
+    pointer-events: none;
+    user-select: none;
+  }
+</style>
+</head>
+<body>
+
+<h1>State Space Models Playground</h1>
+<h2>Kalman Filter Visualizer — x̂ₜ</h2>
+<p class="title-disclaimer">A state space model hides a state xₜ that evolves by a <em>state equation</em> xₜ = F·xₜ₋₁ + wₜ and is seen only through noisy <em>observations</em> yₜ = H·xₜ + vₜ. The Kalman filter recovers the state recursively: each step <em>predicts</em> from the model, then <em>updates</em> toward the new observation by the Kalman gain K. Drag the time cursor t₀ (left panel) to inspect any step; the right panel opens that step up as a tug-of-war between the model's prediction (prior) and the data (likelihood). Tune the process noise Q and observation noise R to watch the filter trust the model (small Q) or chase the data (large Q). Switch Panel A between the filter and the RTS smoother, and use the bottom panel to forecast beyond the data — where q = Q/R fixes the steady-state gain and the exponential-smoothing weight α.</p>
+
+<div class="dim-toggle" id="dimToggle">
+  <button data-dim="1" class="active">Scalar state &nbsp;x ∈ ℝ</button>
+  <button data-dim="2">Vector state &nbsp;x ∈ ℝ²</button>
+</div>
+
+<!-- ============================================================= -->
+<!-- ===============  SCALAR-STATE  MODE  ======================== -->
+<!-- ============================================================= -->
+<div class="dim1">
+
+<!-- ============ Control bar : model + noises ============ -->
+<div class="data-selector">
+  <div class="cb-item" style="flex: 1.3;">
+    <label>State space model</label>
+    <div class="seg" id="modelSeg">
+      <button data-model="level" class="active">Local Level</button>
+      <button data-model="ar1">AR(1)</button>
+    </div>
+    <div class="cb-ends" style="margin-top:6px;"><span id="modelSub">random walk + noise</span><span>xₜ = F·xₜ₋₁ + wₜ ,  yₜ = xₜ + vₜ</span></div>
+  </div>
+
+  <div class="cb-item">
+    <div class="cb-head"><label class="math-label">Process noise Q  (Var wₜ)</label><span class="param-value cb-val" id="val_Q">0.025</span></div>
+    <div class="slider-wrap"><div class="slider-fill" id="fill_Q"></div>
+      <input type="range" id="Q" min="0.001" max="0.2" step="0.001" value="0.025"></div>
+    <div class="cb-ends"><span>small → smooth, trusts model</span><span>large → tracks data</span></div>
+  </div>
+
+  <div class="cb-item">
+    <div class="cb-head"><label class="math-label">Observation noise R  (Var vₜ)</label><span class="param-value cb-val" id="val_R">0.090</span></div>
+    <div class="slider-wrap"><div class="slider-fill" id="fill_R"></div>
+      <input type="range" id="R" min="0.01" max="0.5" step="0.005" value="0.09"></div>
+    <div class="cb-ends"><span>0.01 (clean sensor)</span><span>0.5 (noisy sensor)</span></div>
+  </div>
+</div>
+
+<!-- ============ Control bar : time cursor + estimate view + data ============ -->
+<div class="data-selector">
+  <div class="cb-item" style="flex: 1.6;">
+    <div class="cb-head"><label class="math-label">Time cursor t₀</label><span class="param-value cb-val" id="val_t0">30</span></div>
+    <div class="slider-wrap"><div class="slider-fill" id="fill_t0"></div>
+      <input type="range" id="t0" min="0" max="60" step="1" value="30"></div>
+    <div class="cb-ends"><span>0</span><span>drag on the left panel too →</span></div>
+  </div>
+  <div class="cb-item" style="flex: 1;">
+    <label>Estimate in Panel A</label>
+    <div class="seg" id="viewSeg">
+      <button data-view="filter" class="active">Filter</button>
+      <button data-view="smooth">Smooth</button>
+    </div>
+    <div class="cb-ends" style="margin-top:6px;"><span>x̂ₜ|ₜ · uses y₀…yₜ</span><span>x̂ₜ|_T · all data (RTS)</span></div>
+  </div>
+  <div class="cb-item" style="flex: 1;">
+    <label>Synthetic data</label>
+    <div class="seg"><button id="regenBtn" type="button">↻ Regenerate series</button></div>
+    <div class="cb-ends" style="margin-top:6px;"><span id="seedLbl">seed 42</span><span>same seed → same data</span></div>
+  </div>
+</div>
+
+<div class="grid">
+
+  <!-- ============ Panel A: State & Observations ============ -->
+  <div class="panel primal">
+    <div class="panel-title">State &amp; Observations</div>
+    <div class="panel-subtitle">the hidden state, the noisy data that sees it, and the Kalman-filtered estimate with its ±2σ band</div>
+
+    <div class="legend">
+      <div class="legend-item"><div class="legend-line solid-f"></div>true state (hidden)</div>
+      <div class="legend-item"><div class="legend-line solid-g"></div>observations yₜ</div>
+      <div class="legend-item"><div class="legend-line solid-s"></div>active estimate ± 2σ</div>
+      <div class="legend-item"><div class="legend-line" style="background:rgba(167,139,250,0.4)"></div>other estimate</div>
+    </div>
+
+    <canvas id="primalCanvas" class="drag" role="img" aria-label="State, observations and filtered estimate over time"></canvas>
+
+    <div class="stat-grid">
+      <div class="stat-row"><span class="param-name math-label">t₀</span><span class="param-value" id="t0Val">—</span></div>
+      <div class="stat-row"><span class="param-name math-label">observation y</span><span class="param-value" id="yVal">—</span></div>
+      <div class="stat-row"><span class="param-name math-label">estimate x̂ₜ</span><span class="param-value" id="xfVal">—</span></div>
+      <div class="stat-row"><span class="param-name math-label">± 2σ band</span><span class="param-value" id="bandVal">—</span></div>
+    </div>
+
+    <div class="formula-box">
+      State space model<br>
+      <code>xₜ = F·xₜ₋₁ + wₜ ,  wₜ ~ N(0, Q)</code><br>
+      <code>yₜ = H·xₜ + vₜ ,  vₜ ~ N(0, R)</code><br>
+      <span style="font-size:0.72rem;">We never see xₜ directly — only the noisy yₜ (dots). The filter line is x̂ₜ = E[xₜ | y₀ … yₜ]; the shaded band is its ±2σ uncertainty. Smaller Q ties the estimate to the model (smoother); larger Q lets it chase the data.</span>
+    </div>
+  </div>
+
+  <!-- ============ Panel B: Predict → Update ============ -->
+  <div class="panel submap">
+    <div class="panel-title">Predict → Update  at t₀</div>
+    <div class="panel-subtitle">one Bayesian step: the model's prediction (prior) is pulled toward the observation by the Kalman gain to give the posterior</div>
+
+    <div class="legend">
+      <div class="legend-item"><div class="legend-line" style="background:#6a677a"></div>prior  N(x⁻, P⁻)</div>
+      <div class="legend-item"><div class="legend-line solid-g"></div>likelihood  N(y, R)</div>
+      <div class="legend-item"><div class="legend-line solid-c"></div>posterior  N(x̂, P)</div>
+    </div>
+
+    <canvas id="submapCanvas" role="img" aria-label="Predict and update distributions at the selected step"></canvas>
+
+    <div class="stat-grid">
+      <div class="stat-row"><span class="param-name math-label">prediction x⁻ ± σ⁻</span><span class="param-value" id="priorVal">—</span></div>
+      <div class="stat-row"><span class="param-name math-label">Kalman gain K</span><span class="param-value" id="gainVal">—</span></div>
+      <div class="stat-row"><span class="param-name math-label">innovation y − x⁻</span><span class="param-value" id="innovVal">—</span></div>
+      <div class="stat-row"><span class="param-name math-label">posterior x̂ ± σ</span><span class="param-value" id="postVal">—</span></div>
+    </div>
+
+    <div id="trustBadge" class="badge off">—</div>
+
+    <div class="formula-box">
+      Predict, then update<br>
+      <code>predict:  x⁻ = F·x̂ ,  P⁻ = F·P·F + Q</code><br>
+      <code>update:  K = P⁻ / (P⁻ + R) ,  x̂ = x⁻ + K·(y − x⁻) ,  P = (1 − K)·P⁻</code><br>
+      <span style="font-size:0.72rem;">The gain K ∈ [0, 1] is the trust dial: K → 0 keeps the prediction (trust the model), K → 1 jumps to the observation (trust the data). K rises when the prediction is uncertain (large P⁻) or the sensor is clean (small R).</span>
+    </div>
+  </div>
+
+</div>
+
+<!-- ============ Mid control bar (for Panel C) ============ -->
+<div class="data-selector" id="bar-mid">
+  <div class="cb-item" style="flex: 2;">
+    <div class="cb-head"><label class="math-label">Forecast horizon H  (steps beyond t = T)</label><span class="param-value cb-val" id="val_H">20</span></div>
+    <div class="slider-wrap"><div class="slider-fill" id="fill_H"></div>
+      <input type="range" id="H" min="1" max="40" step="1" value="20"></div>
+    <div class="cb-ends"><span>1</span><span>drag on the panel too →</span></div>
+  </div>
+  <div class="cb-item" style="flex: 1;">
+    <label class="math-label">Signal-to-noise  q = Q / R</label>
+    <div class="cb-ends" style="margin-top:6px;"><span>smaller q → smoother, trusts the model</span></div>
+    <div class="cb-ends"><span>larger q → responsive, tracks the data</span></div>
+    <div class="cb-ends" style="margin-top:4px;"><span>Q, R are set in the top bar; q drives the steady-state gain</span></div>
+  </div>
+</div>
+
+<!-- ============ Panel C: Forecast & the Q/R tradeoff ============ -->
+<div class="panel prox">
+  <div class="panel-title">Forecast &amp; the Q/R Tradeoff</div>
+  <div class="panel-subtitle">predict beyond the data with a widening cone — the signal-to-noise ratio q = Q/R fixes the steady-state gain and, for the local level, the exponential-smoothing weight α</div>
+
+  <div class="legend">
+    <div class="legend-item"><div class="legend-line solid-s"></div>filtered (past)</div>
+    <div class="legend-item"><div class="legend-line" style="background:#fbbf24"></div>forecast mean</div>
+    <div class="legend-item"><div class="legend-line" style="background:rgba(251,191,36,0.35)"></div>±2σ cone</div>
+    <div class="legend-item"><div class="legend-line solid-f"></div>actual future</div>
+  </div>
+
+  <canvas id="proxCanvas" class="drag" role="img" aria-label="Forecast with widening uncertainty cone"></canvas>
+
+  <div class="stat-grid">
+    <div class="stat-row"><span class="param-name math-label">q = Q / R</span><span class="param-value" id="qVal">—</span></div>
+    <div class="stat-row"><span class="param-name math-label">steady-state gain K∞</span><span class="param-value" id="kinfVal">—</span></div>
+    <div class="stat-row"><span class="param-name math-label">EWMA weight α</span><span class="param-value" id="alphaVal">—</span></div>
+    <div class="stat-row"><span class="param-name math-label">forecast x̂(T+H) ± 2σ</span><span class="param-value" id="fcVal">—</span></div>
+  </div>
+
+  <div id="regimeBadge" class="badge off">—</div>
+
+  <div class="formula-box">
+    Steady state &amp; exponential smoothing<br>
+    <code>forecast:  x̂(T+h) = Fʰ·x̂(T) ,  P(T+h) = F·P(T+h−1)·F + Q   (no data → cone widens)</code><br>
+    <code>local level:  x̂ₜ = (1 − α)·x̂ₜ₋₁ + α·yₜ ,  α = K∞</code><br>
+    <span style="font-size:0.72rem;">With F = 1 the prediction variance grows without bound (P + h·Q), so the forecast cone keeps widening. The steady-state Kalman gain K∞ solves the Riccati fixed point and equals the EWMA weight α: small q = Q/R ⇒ small α ⇒ heavy smoothing that trusts the model; large q ⇒ α → 1 ⇒ the estimate chases each observation. For AR(1) (F &lt; 1) the forecast reverts toward the mean and the cone plateaus.</span>
+  </div>
+</div>
+
+</div><!-- /dim1 -->
+
+<!-- ============================================================= -->
+<!-- ===============  VECTOR-STATE  MODE  (Phase 3)  ============= -->
+<!-- ============================================================= -->
+<div class="dim2">
+
+<!-- ============ Control bar : model + process/obs noises ============ -->
+<div class="data-selector">
+  <div class="cb-item" style="flex: 1.2;">
+    <label>Vector-state model</label>
+    <div class="seg" id="modelSeg2">
+      <button data-model2="trend" class="active">Local Linear Trend</button>
+    </div>
+    <div class="cb-ends" style="margin-top:6px;"><span id="modelSub2">level + slope</span><span>F = [[1,1],[0,1]] ,  H = [1, 0]</span></div>
+  </div>
+
+  <div class="cb-item">
+    <div class="cb-head"><label class="math-label">Level noise Q_level</label><span class="param-value cb-val" id="val_Qlev">0.0040</span></div>
+    <div class="slider-wrap"><div class="slider-fill" id="fill_Qlev"></div>
+      <input type="range" id="Qlev" min="0.0005" max="0.05" step="0.0005" value="0.004"></div>
+    <div class="cb-ends"><span>how fast the level wanders</span></div>
+  </div>
+
+  <div class="cb-item">
+    <div class="cb-head"><label class="math-label">Slope noise Q_slope</label><span class="param-value cb-val" id="val_Qslp">0.0015</span></div>
+    <div class="slider-wrap"><div class="slider-fill" id="fill_Qslp"></div>
+      <input type="range" id="Qslp" min="0.0002" max="0.02" step="0.0002" value="0.0015"></div>
+    <div class="cb-ends"><span>stiff trend</span><span>adaptive slope</span></div>
+  </div>
+
+  <div class="cb-item">
+    <div class="cb-head"><label class="math-label">Observation noise R</label><span class="param-value cb-val" id="val_Rv">0.250</span></div>
+    <div class="slider-wrap"><div class="slider-fill" id="fill_Rv"></div>
+      <input type="range" id="Rv" min="0.05" max="1.0" step="0.01" value="0.25"></div>
+    <div class="cb-ends"><span>0.05</span><span>1.0</span></div>
+  </div>
+</div>
+
+<!-- ============ Control bar : time cursor + estimate view + data ============ -->
+<div class="data-selector">
+  <div class="cb-item" style="flex: 1.6;">
+    <div class="cb-head"><label class="math-label">Time cursor t₀</label><span class="param-value cb-val" id="val_t0v">30</span></div>
+    <div class="slider-wrap"><div class="slider-fill" id="fill_t0v"></div>
+      <input type="range" id="t0v" min="0" max="60" step="1" value="30"></div>
+    <div class="cb-ends"><span>0</span><span>drag on Panel A2 too →</span></div>
+  </div>
+  <div class="cb-item" style="flex: 1;">
+    <label>Estimate in Panel A2</label>
+    <div class="seg" id="viewSeg2">
+      <button data-view2="filter" class="active">Filter</button>
+      <button data-view2="smooth">Smooth</button>
+    </div>
+    <div class="cb-ends" style="margin-top:6px;"><span>uses y₀…yₜ</span><span>all data (RTS)</span></div>
+  </div>
+  <div class="cb-item" style="flex: 1;">
+    <label>Synthetic data</label>
+    <div class="seg"><button id="regenBtn2" type="button">↻ Regenerate series</button></div>
+    <div class="cb-ends" style="margin-top:6px;"><span id="seedLbl2">seed 42</span><span>same seed → same data</span></div>
+  </div>
+</div>
+
+<div class="grid">
+
+  <!-- ============ Panel A2: Component decomposition ============ -->
+  <div class="panel primal">
+    <div class="panel-title">Component Decomposition</div>
+    <div class="panel-subtitle">the trend model splits the state into a level μ (top, with the data) and a slope β (bottom) — each filtered with its own ±2σ band</div>
+
+    <div class="legend">
+      <div class="legend-item"><div class="legend-line solid-f"></div>true component</div>
+      <div class="legend-item"><div class="legend-line solid-g"></div>observations yₜ</div>
+      <div class="legend-item"><div class="legend-line solid-s"></div>estimate ± 2σ</div>
+    </div>
+
+    <canvas id="primalCanvas2" class="drag" role="img" aria-label="Level and slope components over time"></canvas>
+
+    <div class="stat-grid">
+      <div class="stat-row"><span class="param-name math-label">t₀</span><span class="param-value" id="t0Val2">—</span></div>
+      <div class="stat-row"><span class="param-name math-label">observation y</span><span class="param-value" id="yVal2">—</span></div>
+      <div class="stat-row"><span class="param-name math-label">level μ̂</span><span class="param-value" id="levelVal2">—</span></div>
+      <div class="stat-row"><span class="param-name math-label">slope β̂</span><span class="param-value" id="slopeVal2">—</span></div>
+    </div>
+
+    <div class="formula-box">
+      Local linear trend<br>
+      <code>μₜ = μₜ₋₁ + βₜ₋₁ + w₁ ,  βₜ = βₜ₋₁ + w₂ ,  yₜ = μₜ + v</code><br>
+      <span style="font-size:0.72rem;">The observation only sees the level (H = [1, 0]); the slope is inferred from how the level moves. The slope band is wider because β is never observed directly.</span>
+    </div>
+  </div>
+
+  <!-- ============ Panel B2: Covariance-ellipse update ============ -->
+  <div class="panel submap">
+    <div class="panel-title">Covariance Ellipse  at t₀</div>
+    <div class="panel-subtitle">the 2D predict → update in (level, slope) space — a scalar level observation shrinks the prior ellipse into the posterior</div>
+
+    <div class="legend">
+      <div class="legend-item"><div class="legend-line" style="background:#6a677a"></div>prior ellipse</div>
+      <div class="legend-item"><div class="legend-line solid-g"></div>level observation</div>
+      <div class="legend-item"><div class="legend-line solid-c"></div>posterior ellipse</div>
+    </div>
+
+    <canvas id="submapCanvas2" role="img" aria-label="Prior and posterior covariance ellipses"></canvas>
+
+    <div class="stat-grid">
+      <div class="stat-row"><span class="param-name math-label">prior (μ⁻, β⁻)</span><span class="param-value" id="priorVal2">—</span></div>
+      <div class="stat-row"><span class="param-name math-label">gain K = (Kμ, Kβ)</span><span class="param-value" id="gainVal2">—</span></div>
+      <div class="stat-row"><span class="param-name math-label">innovation y − μ⁻</span><span class="param-value" id="innovVal2">—</span></div>
+      <div class="stat-row"><span class="param-name math-label">posterior (μ̂, β̂)</span><span class="param-value" id="postVal2">—</span></div>
+    </div>
+
+    <div class="formula-box">
+      Vector update (2×2)<br>
+      <code>K = P⁻Hᵀ / (H P⁻ Hᵀ + R) ,  x̂ = x⁻ + K(y − Hx⁻) ,  P = (I − KH)P⁻</code><br>
+      <span style="font-size:0.72rem;">The observation constrains only the level axis (orange strip), yet the posterior slope also shifts — that is the level–slope correlation in P⁻ carrying information sideways. The ellipse always shrinks.</span>
+    </div>
+  </div>
+
+</div>
+
+<!-- ============ Mid control bar (for Panel C2) ============ -->
+<div class="data-selector" id="bar-mid2">
+  <div class="cb-item" style="flex: 2;">
+    <div class="cb-head"><label class="math-label">Forecast horizon H  (steps beyond t = T)</label><span class="param-value cb-val" id="val_Hv">20</span></div>
+    <div class="slider-wrap"><div class="slider-fill" id="fill_Hv"></div>
+      <input type="range" id="Hv" min="1" max="40" step="1" value="20"></div>
+    <div class="cb-ends"><span>1</span><span>drag on the panel too →</span></div>
+  </div>
+  <div class="cb-item" style="flex: 1;">
+    <label class="math-label">Q_slope vs R</label>
+    <div class="cb-ends" style="margin-top:6px;"><span>small Q_slope → stiff linear forecast</span></div>
+    <div class="cb-ends"><span>large Q_slope → cone widens faster</span></div>
+  </div>
+</div>
+
+<!-- ============ Panel C2: Trend forecast ============ -->
+<div class="panel prox">
+  <div class="panel-title">Trend Forecast &amp; Q_level / Q_slope</div>
+  <div class="panel-subtitle">extrapolate the level along the estimated slope — slope uncertainty compounds, so the cone widens faster than a scalar random walk</div>
+
+  <div class="legend">
+    <div class="legend-item"><div class="legend-line solid-s"></div>filtered level (past)</div>
+    <div class="legend-item"><div class="legend-line" style="background:#fbbf24"></div>forecast mean</div>
+    <div class="legend-item"><div class="legend-line" style="background:rgba(251,191,36,0.35)"></div>±2σ cone</div>
+    <div class="legend-item"><div class="legend-line solid-f"></div>actual future</div>
+  </div>
+
+  <canvas id="proxCanvas2" class="drag" role="img" aria-label="Trend forecast with widening cone"></canvas>
+
+  <div class="stat-grid">
+    <div class="stat-row"><span class="param-name math-label">Q_level</span><span class="param-value" id="qlevVal">—</span></div>
+    <div class="stat-row"><span class="param-name math-label">Q_slope</span><span class="param-value" id="qslpVal">—</span></div>
+    <div class="stat-row"><span class="param-name math-label">slope β̂(T)</span><span class="param-value" id="betaVal">—</span></div>
+    <div class="stat-row"><span class="param-name math-label">forecast x̂(T+H) ± 2σ</span><span class="param-value" id="fcVal2">—</span></div>
+  </div>
+
+  <div id="regimeBadge2" class="badge off">—</div>
+
+  <div class="formula-box">
+    Trend forecast<br>
+    <code>x̂(T+h) = Fʰ·x̂(T)  ⇒  level ≈ μ̂(T) + h·β̂(T)  (straight line along the slope)</code><br>
+    <code>P(T+h) = F·P(T+h−1)·F + Q ,  Q = diag(Q_level, Q_slope)</code><br>
+    <span style="font-size:0.72rem;">Because the level integrates the slope, slope uncertainty feeds into the level variance and the cone grows roughly like h³ — far faster than the local level's linear growth. Small Q_slope keeps the forecast a stiff straight line; large Q_slope lets the slope drift, fanning the cone open. The white dashed line is what actually happened.</span>
+  </div>
+</div>
+
+</div><!-- /dim2 -->
+
+<div class="copyright">© Designed by T.Tsukazaki 2026</div>
+
+<script>
+(function() {
+
+  // ===========================================================
+  //  基本ヘルパー（参照実装から流用）
+  // ===========================================================
+  function dpr() { return window.devicePixelRatio || 1; }
+
+  function setupCanvas(canvas) {
+    const rect = canvas.getBoundingClientRect();
+    const d = dpr();
+    canvas.width = rect.width * d;
+    canvas.height = rect.height * d;
+    const ctx = canvas.getContext('2d');
+    ctx.setTransform(d, 0, 0, d, 0, 0);
+    return { ctx, w: rect.width, h: rect.height };
+  }
+
+  function fmt(x) {
+    if (!isFinite(x)) return '∞';
+    if (Math.abs(x) >= 1000) return x.toExponential(1);
+    if (Math.abs(x) >= 100) return x.toFixed(1);
+    return x.toFixed(2);
+  }
+  function clamp(x, a, b) { return Math.min(b, Math.max(a, x)); }
+
+  function drawArrow(ctx, x0, y0, x1, y1, color, width) {
+    ctx.save();
+    ctx.strokeStyle = color; ctx.fillStyle = color; ctx.lineWidth = width; ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x1, y1); ctx.stroke();
+    const ang = Math.atan2(y1 - y0, x1 - x0), hl = 8;
+    if (Math.hypot(x1 - x0, y1 - y0) > 3) {
+      ctx.beginPath();
+      ctx.moveTo(x1, y1);
+      ctx.lineTo(x1 - hl * Math.cos(ang - 0.4), y1 - hl * Math.sin(ang - 0.4));
+      ctx.lineTo(x1 - hl * Math.cos(ang + 0.4), y1 - hl * Math.sin(ang + 0.4));
+      ctx.closePath(); ctx.fill();
+    }
+    ctx.restore();
+  }
+
+  // ===========================================================
+  //  乱数: seed 固定の疑似乱数（mulberry32）と正規乱数（Box–Muller）。
+  //   seed が同じなら同じ系列を再現する（Regenerate で seed を進める）。
+  // ===========================================================
+  function mulberry32(a) {
+    return function () {
+      a |= 0; a = (a + 0x6D2B79F5) | 0;
+      let t = Math.imul(a ^ (a >>> 15), 1 | a);
+      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+  function gauss(rnd) {
+    let u1 = rnd(), u2 = rnd();
+    if (u1 < 1e-12) u1 = 1e-12;
+    return Math.sqrt(-2 * Math.log(u1)) * Math.cos(2 * Math.PI * u2);
+  }
+  // N(z; mu, varr) の密度
+  function gaussian(z, mu, varr) {
+    return Math.exp(-0.5 * (z - mu) * (z - mu) / varr) / Math.sqrt(2 * Math.PI * varr);
+  }
+
+  const T = 60;      // 観測できる時系列の長さ（ステップ 0 … T）
+  const HMAX = 40;   // 予測できる最大ホライズン（T の先へ最大 HMAX ステップ）
+
+  // ===========================================================
+  //  モデル記述子（スカラー状態）。
+  //    F, H          : 状態方程式 / 観測方程式の係数
+  //    x0, P0        : フィルタの初期状態と初期分散
+  //    Qtrue, Rtrue  : データ生成用の「真の」分散（フィルタの Q, R とは独立）
+  //    simulate(seed): {xtrue[], y[]} を返す（seed 固定で再現可能）
+  //  パネルは記述子に対して汎用に描画する（個別モデルをハードコードしない）。
+  // ===========================================================
+  const MODELS = {
+    level: {
+      label: 'Local Level', sub: 'random walk + noise',
+      F: 1, H: 1, x0: 0, P0: 1, Qtrue: 0.025, Rtrue: 0.09, start: 0,
+      simulate(seed) {
+        const rnd = mulberry32(seed);
+        const xtrue = [], y = [];
+        let x = this.start;
+        for (let t = 0; t <= T + HMAX; t++) {
+          if (t > 0) x = this.F * x + Math.sqrt(this.Qtrue) * gauss(rnd);
+          xtrue.push(x);
+          y.push(this.H * x + Math.sqrt(this.Rtrue) * gauss(rnd));
+        }
+        return { xtrue, y };
+      },
+    },
+    ar1: {
+      // 平均 0 へ回帰する定常な状態。start≠0 から始めて回帰の様子を見せる。
+      label: 'AR(1)', sub: 'mean-reverting state (F = 0.85)',
+      F: 0.85, H: 1, x0: 0, P0: 1, Qtrue: 0.05, Rtrue: 0.09, start: 1.4,
+      simulate(seed) {
+        const rnd = mulberry32(seed);
+        const xtrue = [], y = [];
+        let x = this.start;
+        for (let t = 0; t <= T + HMAX; t++) {
+          if (t > 0) x = this.F * x + Math.sqrt(this.Qtrue) * gauss(rnd);
+          xtrue.push(x);
+          y.push(this.H * x + Math.sqrt(this.Rtrue) * gauss(rnd));
+        }
+        return { xtrue, y };
+      },
+    },
+  };
+
+  // ===========================================================
+  //  カルマンフィルタ（スカラー）。
+  //   予測: x⁻ = F·x̂ ,  P⁻ = F·P·F + Q
+  //   更新: K = P⁻·H / (H·P⁻·H + R) ,  x̂ = x⁻ + K·(y − H·x⁻) ,  P = (1 − K·H)·P⁻
+  //   各 t の {xpred, Ppred, K, xf, Pf} をキャッシュ（Panel B が任意ステップを再生できる）。
+  // ===========================================================
+  function kalman(model, y, Q, R) {
+    const F = model.F, H = model.H;
+    const xpred = [], Ppred = [], K = [], xf = [], Pf = [];
+    let xPrev = model.x0, pPrev = model.P0;
+    for (let t = 0; t < y.length; t++) {
+      let xp, pp;
+      if (t === 0) { xp = model.x0; pp = model.P0; }        // 初期予測（初期事前分布）
+      else { xp = F * xPrev; pp = F * pPrev * F + Q; }       // 予測ステップ
+      const s = H * pp * H + R;                              // 予測観測分散（innovation covariance）
+      const k = pp * H / s;                                  // カルマンゲイン
+      const xu = xp + k * (y[t] - H * xp);                   // 更新ステップ
+      const pu = (1 - k * H) * pp;
+      xpred.push(xp); Ppred.push(pp); K.push(k); xf.push(xu); Pf.push(pu);
+      xPrev = xu; pPrev = pu;
+    }
+    return { xpred, Ppred, K, xf, Pf };
+  }
+
+  // ===========================================================
+  //  RTS 平滑化（後ろ向きパス）。全データ y₀…y_T を使って x̂_{t|T} を得る。
+  //   C = Pf·F / Ppred_{t+1}
+  //   xs = xf + C·(xs_{t+1} − xpred_{t+1}),  Ps = Pf + C·(Ps_{t+1} − Ppred_{t+1})·C
+  //  平滑化推定は必ずフィルタ以下の分散になる（帯が締まる）。
+  // ===========================================================
+  function rts(model, kf) {
+    const F = model.F, n = kf.xf.length;
+    const xs = new Array(n), Ps = new Array(n);
+    xs[n - 1] = kf.xf[n - 1]; Ps[n - 1] = kf.Pf[n - 1];
+    for (let t = n - 2; t >= 0; t--) {
+      const C = kf.Pf[t] * F / kf.Ppred[t + 1];
+      xs[t] = kf.xf[t] + C * (xs[t + 1] - kf.xpred[t + 1]);
+      Ps[t] = kf.Pf[t] + C * (Ps[t + 1] - kf.Ppred[t + 1]) * C;
+    }
+    return { xs, Ps };
+  }
+
+  // ===========================================================
+  //  予測（データなしで予測ステップだけを繰り返す）。
+  //   x̂(T+h) = Fʰ·x̂(T),  P(T+h) = F·P(T+h−1)·F + Q
+  //  F=1 では P は h·Q で増え続け、コーンが広がる。F<1 では定常分散へ収束。
+  // ===========================================================
+  function forecast(model, xT, PT, Q, H) {
+    const F = model.F, xs = [], Ps = [];
+    let x = xT, P = PT;
+    for (let h = 1; h <= H; h++) { x = F * x; P = F * P * F + Q; xs.push(x); Ps.push(P); }
+    return { xs, Ps };
+  }
+
+  // ===========================================================
+  //  定常状態のカルマンゲイン K∞（Riccati 固定点）を反復で求める。
+  //   局所レベル(F=H=1)では x̂ₜ = (1−K∞)x̂ₜ₋₁ + K∞·yₜ の指数平滑となり α = K∞。
+  // ===========================================================
+  function steadyState(model, Q, R) {
+    const F = model.F, H = model.H;
+    let P = model.P0, Kf = 0, Ppred = P;
+    for (let i = 0; i < 500; i++) {
+      Ppred = F * P * F + Q;
+      const s = H * Ppred * H + R;
+      Kf = Ppred * H / s;
+      P = (1 - Kf * H) * Ppred;
+    }
+    return { K: Kf, Ppred, P };
+  }
+
+  // ===========================================================
+  //  ベクトル状態（2 次元）用の小さな行列演算。外部ライブラリは使わない。
+  //   ベクトルは [a, b]、対称共分散は [[p00, p01], [p10, p11]]。
+  // ===========================================================
+  function mv(M, v) { return [M[0][0] * v[0] + M[0][1] * v[1], M[1][0] * v[0] + M[1][1] * v[1]]; }
+  function mm(A, B) {
+    return [
+      [A[0][0] * B[0][0] + A[0][1] * B[1][0], A[0][0] * B[0][1] + A[0][1] * B[1][1]],
+      [A[1][0] * B[0][0] + A[1][1] * B[1][0], A[1][0] * B[0][1] + A[1][1] * B[1][1]],
+    ];
+  }
+  function mt(M) { return [[M[0][0], M[1][0]], [M[0][1], M[1][1]]]; }
+  function madd(A, B) { return [[A[0][0] + B[0][0], A[0][1] + B[0][1]], [A[1][0] + B[1][0], A[1][1] + B[1][1]]]; }
+  function msub(A, B) { return [[A[0][0] - B[0][0], A[0][1] - B[0][1]], [A[1][0] - B[1][0], A[1][1] - B[1][1]]]; }
+  function inv2(M) {
+    const d = M[0][0] * M[1][1] - M[0][1] * M[1][0];
+    return [[M[1][1] / d, -M[0][1] / d], [-M[1][0] / d, M[0][0] / d]];
+  }
+  function copyV(v) { return [v[0], v[1]]; }
+  function copyM(M) { return [[M[0][0], M[0][1]], [M[1][0], M[1][1]]]; }
+  // 対称正定値行列の下三角 Cholesky（共分散楕円の描画に使う）
+  function chol2(P) {
+    const l00 = Math.sqrt(Math.max(P[0][0], 1e-12));
+    const l10 = P[1][0] / l00;
+    const l11 = Math.sqrt(Math.max(P[1][1] - l10 * l10, 1e-12));
+    return [[l00, 0], [l10, l11]];
+  }
+
+  // ===========================================================
+  //  ベクトル状態モデル記述子。局所線形トレンド（level μ + slope β）。
+  //    F=[[1,1],[0,1]], H=[1,0]（観測は level のみ）, Q=diag(Qlev,Qslp), R スカラー。
+  //    Qlev/Qslp/Rtrue はデータ生成用の「真の」分散（フィルタの値とは独立）。
+  //    simulate(seed): {xtrue:[[μ,β]...], y:[...]}。
+  // ===========================================================
+  const MODELS2 = {
+    trend: {
+      label: 'Local Linear Trend', sub: 'level + slope',
+      F: [[1, 1], [0, 1]], H: [1, 0], x0: [0, 0], P0: [[1, 0], [0, 1]],
+      Qlev: 0.004, Qslp: 0.0015, Rtrue: 0.25, startBeta: 0.05,
+      simulate(seed) {
+        const rnd = mulberry32(seed);
+        const xtrue = [], y = [];
+        let mu = 0, beta = this.startBeta;
+        for (let t = 0; t <= T + HMAX; t++) {
+          if (t > 0) {
+            mu = mu + beta + Math.sqrt(this.Qlev) * gauss(rnd);   // μₜ = μₜ₋₁ + βₜ₋₁ + w₁
+            beta = beta + Math.sqrt(this.Qslp) * gauss(rnd);       // βₜ = βₜ₋₁ + w₂
+          }
+          xtrue.push([mu, beta]);
+          y.push(mu + Math.sqrt(this.Rtrue) * gauss(rnd));         // yₜ = μₜ + v
+        }
+        return { xtrue, y };
+      },
+    },
+  };
+
+  // ===========================================================
+  //  ベクトル版カルマンフィルタ。観測はスカラー（H は行ベクトル, R スカラー）なので
+  //  逆行列は不要: S = H·P⁻·Hᵀ + R はスカラー, K = P⁻·Hᵀ / S は 2 ベクトル。
+  // ===========================================================
+  function kalman2(model, y, Q, R) {
+    const F = model.F, H = model.H;
+    const xpred = [], Ppred = [], K = [], xf = [], Pf = [];
+    let x = copyV(model.x0), P = copyM(model.P0);
+    for (let t = 0; t < y.length; t++) {
+      let xp, pp;
+      if (t === 0) { xp = copyV(model.x0); pp = copyM(model.P0); }
+      else { xp = mv(F, x); pp = madd(mm(mm(F, P), mt(F)), Q); }         // 予測
+      const Hx = H[0] * xp[0] + H[1] * xp[1];
+      const PHt = [pp[0][0] * H[0] + pp[0][1] * H[1], pp[1][0] * H[0] + pp[1][1] * H[1]];  // P⁻·Hᵀ
+      const s = H[0] * PHt[0] + H[1] * PHt[1] + R;                       // innovation covariance（スカラー）
+      const k = [PHt[0] / s, PHt[1] / s];                               // カルマンゲイン（2 ベクトル）
+      const innov = y[t] - Hx;
+      const xu = [xp[0] + k[0] * innov, xp[1] + k[1] * innov];           // 更新
+      // P = P⁻ − K·(H·P⁻)。H·P⁻ は P の対称性より PHt と同じ成分。
+      const pu = [
+        [pp[0][0] - k[0] * PHt[0], pp[0][1] - k[0] * PHt[1]],
+        [pp[1][0] - k[1] * PHt[0], pp[1][1] - k[1] * PHt[1]],
+      ];
+      xpred.push(xp); Ppred.push(pp); K.push(k); xf.push(xu); Pf.push(pu);
+      x = xu; P = pu;
+    }
+    return { xpred, Ppred, K, xf, Pf };
+  }
+
+  // ベクトル版 RTS 平滑化（後ろ向きパス）
+  function rts2(model, kf) {
+    const F = model.F, n = kf.xf.length;
+    const xs = new Array(n), Ps = new Array(n);
+    xs[n - 1] = copyV(kf.xf[n - 1]); Ps[n - 1] = copyM(kf.Pf[n - 1]);
+    for (let t = n - 2; t >= 0; t--) {
+      const C = mm(mm(kf.Pf[t], mt(F)), inv2(kf.Ppred[t + 1]));
+      const dx = [xs[t + 1][0] - kf.xpred[t + 1][0], xs[t + 1][1] - kf.xpred[t + 1][1]];
+      xs[t] = [kf.xf[t][0] + C[0][0] * dx[0] + C[0][1] * dx[1],
+               kf.xf[t][1] + C[1][0] * dx[0] + C[1][1] * dx[1]];
+      Ps[t] = madd(kf.Pf[t], mm(mm(C, msub(Ps[t + 1], kf.Ppred[t + 1])), mt(C)));
+    }
+    return { xs, Ps };
+  }
+
+  // ベクトル版予測（データなしで予測ステップを反復）
+  function forecast2(model, xT, PT, Q, H) {
+    const F = model.F, xs = [], Ps = [];
+    let x = copyV(xT), P = copyM(PT);
+    for (let h = 1; h <= H; h++) { x = mv(F, x); P = madd(mm(mm(F, P), mt(F)), Q); xs.push(x); Ps.push(P); }
+    return { xs, Ps };
+  }
+
+  // ===========================================================
+  //  共有状態（単一の真実）。すべてのコントロール / パネルが参照。
+  //    model = 選択中のモデルキー
+  //    t0    = 時刻カーソル（Panel B が開くステップ）
+  //    Q, R  = フィルタが仮定するプロセス / 観測ノイズ
+  //    seed  = 合成データのシード
+  //    data  = simulate 出力,  kf = kalman 出力（commit のたびに再計算）
+  //    dim   = 1 | 2（スカラー / ベクトル。ベクトルは Phase 3）
+  // ===========================================================
+  const S = {
+    dim: 1,
+    model: 'level',
+    t0: 30,
+    Q: 0.025, R: 0.09,
+    view: 'filter',   // Panel A で強調する推定: 'filter' | 'smooth'（両モード共有）
+    H: 20,            // 予測ホライズン（Panel C, 両モード共有）
+    seed: 42,         // 合成データのシード（両モード共有）
+    data: { xtrue: [], y: [] },
+    kf: null,
+    // --- ベクトル状態（Phase 3）---
+    model2: 'trend',
+    Qlev: 0.004, Qslp: 0.0015, Rv: 0.25,   // フィルタが仮定するトレンドモデルのノイズ
+    data2: { xtrue: [], y: [] },
+    kf2: null,
+  };
+
+  function curModel() { return MODELS[S.model]; }
+  function curModel2() { return MODELS2[S.model2]; }
+
+  // 妥当域の保証（Q, R > 0、t0 は整数ステップ）
+  function enforce() {
+    S.Q = clamp(S.Q, 0.001, 0.2);
+    S.R = clamp(S.R, 0.01, 0.5);
+    S.t0 = Math.round(clamp(S.t0, 0, T));
+    S.H = Math.round(clamp(S.H, 1, HMAX));
+    S.Qlev = clamp(S.Qlev, 0.0005, 0.05);
+    S.Qslp = clamp(S.Qslp, 0.0002, 0.02);
+    S.Rv = clamp(S.Rv, 0.05, 1.0);
+  }
+
+  // データ生成 + フィルタ / 平滑化を再計算。seed 固定なので Q/R を動かしても
+  // データは不変（固定データの上でフィルタの挙動だけが変わる）。現在のモードのみ計算。
+  function recompute() {
+    if (S.dim === 1) {
+      S.data = curModel().simulate(S.seed);
+      // フィルタ / 平滑化は観測区間 [0, T] のみ（T より先は予測）
+      const kf = kalman(curModel(), S.data.y.slice(0, T + 1), S.Q, S.R);
+      const sm = rts(curModel(), kf);
+      kf.xs = sm.xs; kf.Ps = sm.Ps;
+      S.kf = kf;
+    } else {
+      S.data2 = curModel2().simulate(S.seed);
+      const Q = [[S.Qlev, 0], [0, S.Qslp]];
+      const kf = kalman2(curModel2(), S.data2.y.slice(0, T + 1), Q, S.Rv);
+      const sm = rts2(curModel2(), kf);
+      kf.xs = sm.xs; kf.Ps = sm.Ps;
+      S.kf2 = kf;
+    }
+  }
+
+  // ===========================================================
+  //  2D プロット用スケール（参照実装から流用）
+  // ===========================================================
+  function makeScale(w, h, pad, xr, yr) {
+    const plotW = w - pad.l - pad.r, plotH = h - pad.t - pad.b;
+    const sx = x => pad.l + (x - xr[0]) / (xr[1] - xr[0]) * plotW;
+    const sy = y => pad.t + (yr[1] - y) / (yr[1] - yr[0]) * plotH;
+    return { sx, sy, plotW, plotH, xr, yr };
+  }
+
+  // 時系列プロット用グリッド（縦は 10 ステップおき、横は整数値）
+  function drawTimeGrid(ctx, sc, w, h, pad) {
+    ctx.strokeStyle = '#1e1e2a'; ctx.lineWidth = 1; ctx.setLineDash([]);
+    for (let gx = 0; gx <= sc.xr[1]; gx += 10) {
+      ctx.beginPath(); ctx.moveTo(sc.sx(gx), sc.sy(sc.yr[1])); ctx.lineTo(sc.sx(gx), sc.sy(sc.yr[0])); ctx.stroke();
+    }
+    const gy0 = Math.ceil(sc.yr[0]), gy1 = Math.floor(sc.yr[1]);
+    for (let gy = gy0; gy <= gy1; gy++) {
+      ctx.beginPath(); ctx.moveTo(sc.sx(sc.xr[0]), sc.sy(gy)); ctx.lineTo(sc.sx(sc.xr[1]), sc.sy(gy)); ctx.stroke();
+    }
+    // 0 ラインを強調
+    if (sc.yr[0] <= 0 && sc.yr[1] >= 0) {
+      ctx.strokeStyle = '#3a3850'; ctx.lineWidth = 1.2;
+      ctx.beginPath(); ctx.moveTo(sc.sx(sc.xr[0]), sc.sy(0)); ctx.lineTo(sc.sx(sc.xr[1]), sc.sy(0)); ctx.stroke();
+    }
+    // 目盛り
+    ctx.fillStyle = '#3a3850'; ctx.font = '9px monospace';
+    ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+    for (let gx = 0; gx <= sc.xr[1]; gx += 10) ctx.fillText(gx.toString(), sc.sx(gx), h - pad.b + 6);
+    ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+    for (let gy = gy0; gy <= gy1; gy++) { if (gy === 0) continue; ctx.fillText(gy.toString(), pad.l - 6, sc.sy(gy)); }
+  }
+
+  // ===========================================================
+  //  Panel A : 状態と観測 + 推定（フィルタ / 平滑化を切替、±2σ）
+  // ===========================================================
+  let primalGeo = null;   // t0 ドラッグ用に直近のスケールを保持
+
+  function renderStates() {
+    const canvas = document.getElementById('primalCanvas');
+    const { ctx, w, h } = setupCanvas(canvas);
+    ctx.clearRect(0, 0, w, h);
+    const xtrue = S.data.xtrue, y = S.data.y, kf = S.kf;
+    const useSmooth = S.view === 'smooth';
+    const est = useSmooth ? kf.xs : kf.xf;      // アクティブ推定
+    const estP = useSmooth ? kf.Ps : kf.Pf;
+    const other = useSmooth ? kf.xf : kf.xs;    // 比較用（非アクティブ）
+
+    // y レンジ（真値・観測・両推定の ±2σ 帯 を包む）
+    let lo = Infinity, hi = -Infinity;
+    for (let t = 0; t <= T; t++) {
+      const bf = 2 * Math.sqrt(kf.Pf[t]), bs = 2 * Math.sqrt(kf.Ps[t]);
+      lo = Math.min(lo, y[t], xtrue[t], kf.xf[t] - bf, kf.xs[t] - bs);
+      hi = Math.max(hi, y[t], xtrue[t], kf.xf[t] + bf, kf.xs[t] + bs);
+    }
+    const span = Math.max(hi - lo, 1);
+    const yr = [lo - 0.12 * span, hi + 0.12 * span];
+    const pad = { l: 34, r: 14, t: 16, b: 24 };
+    const sc = makeScale(w, h, pad, [0, T], yr);
+    primalGeo = { l: pad.l, plotW: sc.plotW };
+
+    drawTimeGrid(ctx, sc, w, h, pad);
+
+    // --- アクティブ推定の ±2σ 帯 ---
+    ctx.beginPath();
+    for (let t = 0; t <= T; t++) {
+      const u = est[t] + 2 * Math.sqrt(estP[t]);
+      const px = sc.sx(t), py = sc.sy(u);
+      if (t === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+    }
+    for (let t = T; t >= 0; t--) ctx.lineTo(sc.sx(t), sc.sy(est[t] - 2 * Math.sqrt(estP[t])));
+    ctx.closePath();
+    ctx.fillStyle = 'rgba(167,139,250,0.15)'; ctx.fill();
+
+    // --- 真の状態（隠れ・破線）---
+    ctx.strokeStyle = 'rgba(232,230,240,0.55)'; ctx.lineWidth = 1.6; ctx.setLineDash([5, 4]); ctx.lineJoin = 'round';
+    ctx.beginPath();
+    for (let t = 0; t <= T; t++) {
+      const px = sc.sx(t), py = sc.sy(xtrue[t]);
+      if (t === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+    }
+    ctx.stroke(); ctx.setLineDash([]);
+
+    // --- 観測 y（点）---
+    ctx.fillStyle = '#f97316';
+    for (let t = 0; t <= T; t++) { ctx.beginPath(); ctx.arc(sc.sx(t), sc.sy(y[t]), 2.4, 0, Math.PI * 2); ctx.fill(); }
+
+    // --- 非アクティブ推定（薄い破線・比較用）---
+    ctx.strokeStyle = 'rgba(167,139,250,0.4)'; ctx.lineWidth = 1.4; ctx.setLineDash([3, 3]); ctx.lineJoin = 'round';
+    ctx.beginPath();
+    for (let t = 0; t <= T; t++) { const px = sc.sx(t), py = sc.sy(other[t]); if (t === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py); }
+    ctx.stroke(); ctx.setLineDash([]);
+
+    // --- アクティブ推定 x̂（実線）---
+    ctx.strokeStyle = '#a78bfa'; ctx.lineWidth = 2.4; ctx.lineJoin = 'round';
+    ctx.beginPath();
+    for (let t = 0; t <= T; t++) { const px = sc.sx(t), py = sc.sy(est[t]); if (t === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py); }
+    ctx.stroke();
+
+    // --- 時刻カーソル t0 ---
+    const t0 = S.t0, cx = sc.sx(t0);
+    ctx.strokeStyle = 'rgba(251,191,36,0.6)'; ctx.lineWidth = 1.4; ctx.setLineDash([4, 3]);
+    ctx.beginPath(); ctx.moveTo(cx, sc.sy(yr[1])); ctx.lineTo(cx, sc.sy(yr[0])); ctx.stroke(); ctx.setLineDash([]);
+    // 観測点のマーカー
+    ctx.beginPath(); ctx.arc(cx, sc.sy(y[t0]), 4.5, 0, Math.PI * 2); ctx.fillStyle = '#f97316'; ctx.fill();
+    ctx.strokeStyle = '#0d0d14'; ctx.lineWidth = 1.5; ctx.stroke();
+    // 推定点のマーカー
+    ctx.beginPath(); ctx.arc(cx, sc.sy(est[t0]), 5.5, 0, Math.PI * 2); ctx.fillStyle = '#a78bfa'; ctx.fill();
+    ctx.strokeStyle = '#0d0d14'; ctx.lineWidth = 2; ctx.stroke();
+    ctx.fillStyle = '#fbbf24'; ctx.font = '10px "Courier New", monospace'; ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+    ctx.fillText('t₀', cx, sc.sy(yr[1]) + 2);
+
+    // --- 数値 ---
+    const sd0 = Math.sqrt(estP[t0]);
+    document.getElementById('t0Val').textContent = t0.toString() + (useSmooth ? '  (smooth)' : '  (filter)');
+    document.getElementById('yVal').textContent = fmt(y[t0]);
+    document.getElementById('xfVal').textContent = fmt(est[t0]);
+    document.getElementById('bandVal').textContent = '± ' + fmt(2 * sd0);
+  }
+
+  // ===========================================================
+  //  Panel B : 予測 → 更新（t0 での 1 ベイズ更新）
+  //   prior N(x⁻,P⁻) × likelihood N(y,R) ∝ posterior N(x̂,P)
+  // ===========================================================
+  function renderUpdate() {
+    const canvas = document.getElementById('submapCanvas');
+    const { ctx, w, h } = setupCanvas(canvas);
+    ctx.clearRect(0, 0, w, h);
+    const kf = S.kf, t0 = S.t0, y = S.data.y[t0], R = S.R;
+    const xm = kf.xpred[t0], Pm = kf.Ppred[t0];   // prior（予測）
+    const xf = kf.xf[t0], Pf = kf.Pf[t0];          // posterior（更新後）
+    const K = kf.K[t0];
+    const sPm = Math.sqrt(Pm), sR = Math.sqrt(R), sPf = Math.sqrt(Pf);
+
+    // z（状態値）軸レンジ: 3 分布を包む
+    let lo = Math.min(xm - 3 * sPm, y - 3 * sR, xf - 3 * sPf);
+    let hi = Math.max(xm + 3 * sPm, y + 3 * sR, xf + 3 * sPf);
+    const span = Math.max(hi - lo, 1e-6); lo -= 0.05 * span; hi += 0.05 * span;
+
+    const pad = { l: 16, r: 16, t: 20, b: 44 };
+    const plotW = w - pad.l - pad.r, plotH = h - pad.t - pad.b;
+    const sx = z => pad.l + (z - lo) / (hi - lo) * plotW;
+    const baseY = pad.t + plotH;
+
+    // 密度の最大値で縦スケールを決める（最も尖った＝最も確実な分布が最も高い）
+    const peak = Math.max(gaussian(xm, xm, Pm), gaussian(y, y, R), gaussian(xf, xf, Pf));
+    const syd = d => baseY - (d / peak) * (plotH - 6);
+
+    // 基線
+    ctx.strokeStyle = '#3a3850'; ctx.lineWidth = 1.2;
+    ctx.beginPath(); ctx.moveTo(pad.l, baseY); ctx.lineTo(pad.l + plotW, baseY); ctx.stroke();
+
+    const N = 160;
+    function drawBell(mu, varr, stroke, fill) {
+      // 塗り
+      ctx.beginPath();
+      for (let i = 0; i <= N; i++) {
+        const z = lo + (hi - lo) * i / N, px = sx(z), py = syd(gaussian(z, mu, varr));
+        if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+      }
+      ctx.lineTo(sx(hi), baseY); ctx.lineTo(sx(lo), baseY); ctx.closePath();
+      ctx.fillStyle = fill; ctx.fill();
+      // 曲線
+      ctx.beginPath();
+      for (let i = 0; i <= N; i++) {
+        const z = lo + (hi - lo) * i / N, px = sx(z), py = syd(gaussian(z, mu, varr));
+        if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+      }
+      ctx.strokeStyle = stroke; ctx.lineWidth = 2.2; ctx.lineJoin = 'round'; ctx.stroke();
+    }
+
+    drawBell(xm, Pm, '#6a677a', 'rgba(106,103,122,0.14)');   // prior（予測）
+    drawBell(y, R, '#f97316', 'rgba(249,115,22,0.10)');       // likelihood（観測）
+    drawBell(xf, Pf, '#38bdf8', 'rgba(56,189,248,0.20)');     // posterior（更新後）
+
+    // 平均の縦線 + ラベル（基線の下に段違いで置いて重なりを避ける）
+    function meanTick(mu, color, label, dy) {
+      ctx.strokeStyle = color; ctx.lineWidth = 1; ctx.setLineDash([3, 3]);
+      ctx.beginPath(); ctx.moveTo(sx(mu), baseY); ctx.lineTo(sx(mu), pad.t); ctx.stroke(); ctx.setLineDash([]);
+      ctx.fillStyle = color; ctx.font = '10px "Courier New", monospace'; ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+      ctx.fillText(label, sx(mu), baseY + dy);
+    }
+    meanTick(xm, '#6a677a', 'x⁻', 3);
+    meanTick(y, '#f97316', 'y', 15);
+    meanTick(xf, '#38bdf8', 'x̂', 27);
+
+    // カルマンゲインの移動量（予測 → 更新後 = K·innovation）を上部の矢印で示す
+    const arrY = pad.t + 4;
+    if (Math.abs(sx(xf) - sx(xm)) > 2) {
+      drawArrow(ctx, sx(xm), arrY, sx(xf), arrY, '#fbbf24', 1.6);
+      ctx.fillStyle = '#fbbf24'; ctx.font = '10px "Courier New", monospace'; ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
+      ctx.fillText('K·(y − x⁻)', (sx(xm) + sx(xf)) / 2, arrY - 2);
+    }
+
+    // --- 数値 / トラスト表示 ---
+    const innov = y - xm;
+    document.getElementById('priorVal').textContent = fmt(xm) + ' ± ' + fmt(sPm);
+    document.getElementById('gainVal').textContent = fmt(K);
+    document.getElementById('innovVal').textContent = fmt(innov);
+    document.getElementById('postVal').textContent = fmt(xf) + ' ± ' + fmt(sPf);
+    const badge = document.getElementById('trustBadge');
+    if (K < 0.34) { badge.className = 'badge off'; badge.textContent = 'K = ' + fmt(K) + ' — leans on the model (prediction)'; }
+    else if (K > 0.66) { badge.className = 'badge on'; badge.textContent = 'K = ' + fmt(K) + ' — leans on the data (observation)'; }
+    else { badge.className = 'badge on'; badge.textContent = 'K = ' + fmt(K) + ' — balances model and data'; }
+  }
+
+  // ===========================================================
+  //  Panel C : 予測（広がるコーン）と q = Q/R トレードオフ
+  // ===========================================================
+  let forecastGeo = null;   // H ドラッグ用
+
+  function renderForecast() {
+    const canvas = document.getElementById('proxCanvas');
+    const { ctx, w, h } = setupCanvas(canvas);
+    ctx.clearRect(0, 0, w, h);
+    const model = curModel(), kf = S.kf, y = S.data.y, xtrue = S.data.xtrue, H = S.H;
+    const xT = kf.xf[T], PT = kf.Pf[T];
+    const fc = forecast(model, xT, PT, S.Q, H);   // {xs, Ps}（h = 1 … H）
+
+    const Tstart = Math.max(0, T - 24);
+    const xr = [Tstart, T + H];
+
+    // y レンジ（直近の観測 / フィルタ + 予測コーン + 実際の将来 を包む）
+    let lo = Infinity, hi = -Infinity;
+    for (let t = Tstart; t <= T; t++) { lo = Math.min(lo, y[t], kf.xf[t]); hi = Math.max(hi, y[t], kf.xf[t]); }
+    for (let k = 1; k <= H; k++) {
+      const c = 2 * Math.sqrt(fc.Ps[k - 1]);
+      lo = Math.min(lo, fc.xs[k - 1] - c, xtrue[T + k]);
+      hi = Math.max(hi, fc.xs[k - 1] + c, xtrue[T + k]);
+    }
+    const span = Math.max(hi - lo, 1);
+    const yr = [lo - 0.12 * span, hi + 0.12 * span];
+    const pad = { l: 34, r: 14, t: 16, b: 24 };
+    const sc = makeScale(w, h, pad, xr, yr);
+    forecastGeo = { l: pad.l, plotW: sc.plotW, xr };
+
+    drawTimeGrid(ctx, sc, w, h, pad);
+
+    // --- 予測コーン（±2σ, アンバー塗り）---
+    ctx.beginPath();
+    ctx.moveTo(sc.sx(T), sc.sy(xT));
+    for (let k = 1; k <= H; k++) ctx.lineTo(sc.sx(T + k), sc.sy(fc.xs[k - 1] + 2 * Math.sqrt(fc.Ps[k - 1])));
+    for (let k = H; k >= 1; k--) ctx.lineTo(sc.sx(T + k), sc.sy(fc.xs[k - 1] - 2 * Math.sqrt(fc.Ps[k - 1])));
+    ctx.lineTo(sc.sx(T), sc.sy(xT));
+    ctx.closePath(); ctx.fillStyle = 'rgba(251,191,36,0.13)'; ctx.fill();
+
+    // --- 「now」= T の縦線 ---
+    ctx.strokeStyle = 'rgba(251,191,36,0.5)'; ctx.lineWidth = 1.4; ctx.setLineDash([5, 4]);
+    ctx.beginPath(); ctx.moveTo(sc.sx(T), sc.sy(yr[1])); ctx.lineTo(sc.sx(T), sc.sy(yr[0])); ctx.stroke(); ctx.setLineDash([]);
+    ctx.fillStyle = 'rgba(251,191,36,0.7)'; ctx.font = '10px monospace'; ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+    ctx.fillText('now (t = T)', sc.sx(T) + 4, sc.sy(yr[1]) + 4);
+
+    // --- 過去の観測（点）---
+    ctx.fillStyle = '#f97316';
+    for (let t = Tstart; t <= T; t++) { ctx.beginPath(); ctx.arc(sc.sx(t), sc.sy(y[t]), 2.4, 0, Math.PI * 2); ctx.fill(); }
+
+    // --- 実際の将来（比較・白破線 + 薄い点）---
+    ctx.strokeStyle = 'rgba(232,230,240,0.5)'; ctx.lineWidth = 1.6; ctx.setLineDash([4, 4]); ctx.lineJoin = 'round';
+    ctx.beginPath(); ctx.moveTo(sc.sx(T), sc.sy(xtrue[T]));
+    for (let k = 1; k <= H; k++) ctx.lineTo(sc.sx(T + k), sc.sy(xtrue[T + k]));
+    ctx.stroke(); ctx.setLineDash([]);
+    ctx.fillStyle = 'rgba(249,115,22,0.4)';
+    for (let k = 1; k <= H; k++) { ctx.beginPath(); ctx.arc(sc.sx(T + k), sc.sy(y[T + k]), 2, 0, Math.PI * 2); ctx.fill(); }
+
+    // --- 過去のフィルタ推定（紫）---
+    ctx.strokeStyle = '#a78bfa'; ctx.lineWidth = 2.2; ctx.lineJoin = 'round';
+    ctx.beginPath();
+    for (let t = Tstart; t <= T; t++) { const px = sc.sx(t), py = sc.sy(kf.xf[t]); if (t === Tstart) ctx.moveTo(px, py); else ctx.lineTo(px, py); }
+    ctx.stroke();
+
+    // --- 予測平均（アンバー破線）---
+    ctx.strokeStyle = '#fbbf24'; ctx.lineWidth = 2.4; ctx.setLineDash([6, 4]); ctx.lineJoin = 'round';
+    ctx.beginPath(); ctx.moveTo(sc.sx(T), sc.sy(xT));
+    for (let k = 1; k <= H; k++) ctx.lineTo(sc.sx(T + k), sc.sy(fc.xs[k - 1]));
+    ctx.stroke(); ctx.setLineDash([]);
+    // 予測終端のマーカー
+    ctx.beginPath(); ctx.arc(sc.sx(T + H), sc.sy(fc.xs[H - 1]), 5, 0, Math.PI * 2);
+    ctx.fillStyle = '#fbbf24'; ctx.fill(); ctx.strokeStyle = '#0d0d14'; ctx.lineWidth = 2; ctx.stroke();
+
+    // --- 数値 / 定常状態・指数平滑 ---
+    const ss = steadyState(model, S.Q, S.R);
+    const q = S.Q / S.R, alpha = ss.K;
+    const fcEnd = fc.xs[H - 1], fcSd = Math.sqrt(fc.Ps[H - 1]);
+    document.getElementById('qVal').textContent = fmt(q);
+    document.getElementById('kinfVal').textContent = fmt(ss.K);
+    document.getElementById('alphaVal').textContent = fmt(alpha);
+    document.getElementById('fcVal').textContent = fmt(fcEnd) + ' ± ' + fmt(2 * fcSd);
+    const badge = document.getElementById('regimeBadge');
+    if (alpha < 0.2) { badge.className = 'badge off'; badge.textContent = 'α = ' + fmt(alpha) + ' — heavy smoothing, trusts the model'; }
+    else if (alpha > 0.5) { badge.className = 'badge on'; badge.textContent = 'α = ' + fmt(alpha) + ' — light smoothing, tracks the data'; }
+    else { badge.className = 'badge on'; badge.textContent = 'α = ' + fmt(alpha) + ' — moderate smoothing'; }
+  }
+
+  // ===========================================================
+  //  ベクトルモード用の描画ヘルパー
+  // ===========================================================
+  // サブプロット用の軽量グリッド（縦 10 ステップおき、0 ライン、任意で x 目盛り）
+  function drawSubGrid(ctx, sc, w, h, pad, xticks) {
+    ctx.strokeStyle = '#1e1e2a'; ctx.lineWidth = 1; ctx.setLineDash([]);
+    for (let gx = 0; gx <= sc.xr[1]; gx += 10) {
+      ctx.beginPath(); ctx.moveTo(sc.sx(gx), sc.sy(sc.yr[1])); ctx.lineTo(sc.sx(gx), sc.sy(sc.yr[0])); ctx.stroke();
+    }
+    if (sc.yr[0] <= 0 && sc.yr[1] >= 0) {
+      ctx.strokeStyle = '#3a3850'; ctx.lineWidth = 1.2;
+      ctx.beginPath(); ctx.moveTo(sc.sx(sc.xr[0]), sc.sy(0)); ctx.lineTo(sc.sx(sc.xr[1]), sc.sy(0)); ctx.stroke();
+    }
+    if (xticks) {
+      ctx.fillStyle = '#3a3850'; ctx.font = '9px monospace'; ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+      for (let gx = 0; gx <= sc.xr[1]; gx += 10) ctx.fillText(gx.toString(), sc.sx(gx), h - pad.b + 6);
+    }
+  }
+
+  // 共分散楕円（nsig·σ）を Cholesky で単位円を変換して描く（軸スケール非等方でも可）
+  function drawEllipse(ctx, sc, mean, P, nsig, stroke, fill) {
+    const L = chol2(P), n = 72;
+    ctx.beginPath();
+    for (let i = 0; i <= n; i++) {
+      const th = 2 * Math.PI * i / n, c = Math.cos(th), s = Math.sin(th);
+      const px = mean[0] + nsig * (L[0][0] * c + L[0][1] * s);
+      const py = mean[1] + nsig * (L[1][0] * c + L[1][1] * s);
+      const X = sc.sx(px), Y = sc.sy(py);
+      if (i === 0) ctx.moveTo(X, Y); else ctx.lineTo(X, Y);
+    }
+    ctx.closePath();
+    if (fill) { ctx.fillStyle = fill; ctx.fill(); }
+    ctx.strokeStyle = stroke; ctx.lineWidth = 2; ctx.stroke();
+  }
+
+  // ===========================================================
+  //  Panel A2 : 成分分解（level μ を上、slope β を下）
+  // ===========================================================
+  let primalGeo2 = null;   // t0 ドラッグ用
+
+  function render2A() {
+    const canvas = document.getElementById('primalCanvas2');
+    const { ctx, w, h } = setupCanvas(canvas);
+    ctx.clearRect(0, 0, w, h);
+    const xtrue = S.data2.xtrue, y = S.data2.y, kf = S.kf2;
+    const useSmooth = S.view === 'smooth';
+    const est = useSmooth ? kf.xs : kf.xf, estP = useSmooth ? kf.Ps : kf.Pf;
+
+    // level / slope それぞれのレンジ
+    let lLo = Infinity, lHi = -Infinity, sLo = Infinity, sHi = -Infinity;
+    for (let t = 0; t <= T; t++) {
+      const bl = 2 * Math.sqrt(estP[t][0][0]), bs = 2 * Math.sqrt(estP[t][1][1]);
+      lLo = Math.min(lLo, y[t], xtrue[t][0], est[t][0] - bl); lHi = Math.max(lHi, y[t], xtrue[t][0], est[t][0] + bl);
+      sLo = Math.min(sLo, xtrue[t][1], est[t][1] - bs); sHi = Math.max(sHi, xtrue[t][1], est[t][1] + bs);
+    }
+    const lSpan = Math.max(lHi - lLo, 1), sSpan = Math.max(sHi - sLo, 0.05);
+    const yrL = [lLo - 0.1 * lSpan, lHi + 0.1 * lSpan], yrS = [sLo - 0.15 * sSpan, sHi + 0.15 * sSpan];
+
+    const pTop = 16, pBot = 24, gap = 16;
+    const upH = Math.round((h - pTop - pBot - gap) * 0.60);
+    const padU = { l: 36, r: 14, t: pTop, b: h - pTop - upH };
+    const scU = makeScale(w, h, padU, [0, T], yrL);
+    const lowTop = pTop + upH + gap;
+    const padL = { l: 36, r: 14, t: lowTop, b: pBot };
+    const scL = makeScale(w, h, padL, [0, T], yrS);
+    primalGeo2 = { l: padU.l, plotW: scU.plotW };
+
+    drawSubGrid(ctx, scU, w, h, padU, false);
+    drawSubGrid(ctx, scL, w, h, padL, true);
+
+    // ---- level（上）----
+    ctx.beginPath();
+    for (let t = 0; t <= T; t++) { const u = est[t][0] + 2 * Math.sqrt(estP[t][0][0]); const px = scU.sx(t), py = scU.sy(u); if (t === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py); }
+    for (let t = T; t >= 0; t--) ctx.lineTo(scU.sx(t), scU.sy(est[t][0] - 2 * Math.sqrt(estP[t][0][0])));
+    ctx.closePath(); ctx.fillStyle = 'rgba(167,139,250,0.15)'; ctx.fill();
+    ctx.strokeStyle = 'rgba(232,230,240,0.55)'; ctx.lineWidth = 1.6; ctx.setLineDash([5, 4]); ctx.lineJoin = 'round';
+    ctx.beginPath(); for (let t = 0; t <= T; t++) { const px = scU.sx(t), py = scU.sy(xtrue[t][0]); if (t === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py); } ctx.stroke(); ctx.setLineDash([]);
+    ctx.fillStyle = '#f97316'; for (let t = 0; t <= T; t++) { ctx.beginPath(); ctx.arc(scU.sx(t), scU.sy(y[t]), 2.2, 0, Math.PI * 2); ctx.fill(); }
+    ctx.strokeStyle = '#a78bfa'; ctx.lineWidth = 2.4; ctx.lineJoin = 'round';
+    ctx.beginPath(); for (let t = 0; t <= T; t++) { const px = scU.sx(t), py = scU.sy(est[t][0]); if (t === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py); } ctx.stroke();
+    ctx.fillStyle = '#6a677a'; ctx.font = '10px monospace'; ctx.textAlign = 'left'; ctx.textBaseline = 'top'; ctx.fillText('level μ  (+ observations)', padU.l + 2, pTop + 2);
+
+    // ---- slope（下）----
+    ctx.beginPath();
+    for (let t = 0; t <= T; t++) { const u = est[t][1] + 2 * Math.sqrt(estP[t][1][1]); const px = scL.sx(t), py = scL.sy(u); if (t === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py); }
+    for (let t = T; t >= 0; t--) ctx.lineTo(scL.sx(t), scL.sy(est[t][1] - 2 * Math.sqrt(estP[t][1][1])));
+    ctx.closePath(); ctx.fillStyle = 'rgba(167,139,250,0.15)'; ctx.fill();
+    ctx.strokeStyle = 'rgba(232,230,240,0.55)'; ctx.lineWidth = 1.4; ctx.setLineDash([5, 4]);
+    ctx.beginPath(); for (let t = 0; t <= T; t++) { const px = scL.sx(t), py = scL.sy(xtrue[t][1]); if (t === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py); } ctx.stroke(); ctx.setLineDash([]);
+    ctx.strokeStyle = '#a78bfa'; ctx.lineWidth = 2.2;
+    ctx.beginPath(); for (let t = 0; t <= T; t++) { const px = scL.sx(t), py = scL.sy(est[t][1]); if (t === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py); } ctx.stroke();
+    ctx.fillStyle = '#6a677a'; ctx.font = '10px monospace'; ctx.textAlign = 'left'; ctx.textBaseline = 'top'; ctx.fillText('slope β', padL.l + 2, lowTop + 2);
+
+    // ---- 時刻カーソル t0（両方）----
+    const t0 = S.t0;
+    ctx.strokeStyle = 'rgba(251,191,36,0.6)'; ctx.lineWidth = 1.4; ctx.setLineDash([4, 3]);
+    ctx.beginPath(); ctx.moveTo(scU.sx(t0), scU.sy(yrL[1])); ctx.lineTo(scU.sx(t0), scU.sy(yrL[0])); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(scL.sx(t0), scL.sy(yrS[1])); ctx.lineTo(scL.sx(t0), scL.sy(yrS[0])); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.beginPath(); ctx.arc(scU.sx(t0), scU.sy(est[t0][0]), 5, 0, Math.PI * 2); ctx.fillStyle = '#a78bfa'; ctx.fill(); ctx.strokeStyle = '#0d0d14'; ctx.lineWidth = 2; ctx.stroke();
+    ctx.beginPath(); ctx.arc(scL.sx(t0), scL.sy(est[t0][1]), 4.5, 0, Math.PI * 2); ctx.fillStyle = '#a78bfa'; ctx.fill(); ctx.strokeStyle = '#0d0d14'; ctx.lineWidth = 2; ctx.stroke();
+
+    // ---- 数値 ----
+    document.getElementById('t0Val2').textContent = t0.toString() + (useSmooth ? '  (smooth)' : '  (filter)');
+    document.getElementById('levelVal2').textContent = fmt(est[t0][0]) + ' ± ' + fmt(2 * Math.sqrt(estP[t0][0][0]));
+    document.getElementById('slopeVal2').textContent = est[t0][1].toFixed(3) + ' ± ' + (2 * Math.sqrt(estP[t0][1][1])).toFixed(3);
+    document.getElementById('yVal2').textContent = fmt(y[t0]);
+  }
+
+  // ===========================================================
+  //  Panel B2 : 2D 共分散楕円の更新（level μ × slope β 平面）
+  // ===========================================================
+  function render2B() {
+    const canvas = document.getElementById('submapCanvas2');
+    const { ctx, w, h } = setupCanvas(canvas);
+    ctx.clearRect(0, 0, w, h);
+    const kf = S.kf2, t0 = S.t0, y = S.data2.y[t0], R = S.Rv;
+    const xm = kf.xpred[t0], Pm = kf.Ppred[t0], xf = kf.xf[t0], Pf = kf.Pf[t0], K = kf.K[t0];
+    const nx = 2.2;
+    const cx = [xm[0] - nx * Math.sqrt(Pm[0][0]), xm[0] + nx * Math.sqrt(Pm[0][0]), xf[0] - nx * Math.sqrt(Pf[0][0]), xf[0] + nx * Math.sqrt(Pf[0][0]), y];
+    const cy = [xm[1] - nx * Math.sqrt(Pm[1][1]), xm[1] + nx * Math.sqrt(Pm[1][1]), xf[1] - nx * Math.sqrt(Pf[1][1]), xf[1] + nx * Math.sqrt(Pf[1][1]), 0];
+    let xlo = Math.min.apply(null, cx), xhi = Math.max.apply(null, cx);
+    let ylo = Math.min.apply(null, cy), yhi = Math.max.apply(null, cy);
+    const xs2 = Math.max(xhi - xlo, 0.5), ys2 = Math.max(yhi - ylo, 0.05);
+    const xr = [xlo - 0.12 * xs2, xhi + 0.12 * xs2], yr = [ylo - 0.15 * ys2, yhi + 0.15 * ys2];
+    const pad = { l: 40, r: 16, t: 16, b: 28 };
+    const sc = makeScale(w, h, pad, xr, yr);
+
+    // 0 ライン
+    if (xr[0] <= 0 && xr[1] >= 0) { ctx.strokeStyle = '#2a2a3a'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(sc.sx(0), sc.sy(yr[0])); ctx.lineTo(sc.sx(0), sc.sy(yr[1])); ctx.stroke(); }
+    if (yr[0] <= 0 && yr[1] >= 0) { ctx.strokeStyle = '#2a2a3a'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(sc.sx(xr[0]), sc.sy(0)); ctx.lineTo(sc.sx(xr[1]), sc.sy(0)); ctx.stroke(); }
+    ctx.fillStyle = '#5a5870'; ctx.font = '11px "Courier New", monospace';
+    ctx.textAlign = 'right'; ctx.textBaseline = 'bottom'; ctx.fillText('level μ', sc.sx(xr[1]) - 3, sc.sy(yr[0]) - 3);
+    ctx.textAlign = 'left'; ctx.textBaseline = 'top'; ctx.fillText('slope β', sc.sx(xr[0]) + 3, sc.sy(yr[1]) + 3);
+
+    // 観測（level のみ拘束）→ μ = y の縦帯 ±√R
+    const sR = Math.sqrt(R);
+    ctx.fillStyle = 'rgba(249,115,22,0.08)';
+    ctx.fillRect(sc.sx(y - sR), sc.sy(yr[1]), sc.sx(y + sR) - sc.sx(y - sR), sc.sy(yr[0]) - sc.sy(yr[1]));
+    ctx.strokeStyle = 'rgba(249,115,22,0.8)'; ctx.lineWidth = 1.6; ctx.setLineDash([5, 4]);
+    ctx.beginPath(); ctx.moveTo(sc.sx(y), sc.sy(yr[0])); ctx.lineTo(sc.sx(y), sc.sy(yr[1])); ctx.stroke(); ctx.setLineDash([]);
+    ctx.fillStyle = 'rgba(249,115,22,0.8)'; ctx.font = '10px monospace'; ctx.textAlign = 'center'; ctx.textBaseline = 'top'; ctx.fillText('y (level obs)', sc.sx(y), sc.sy(yr[1]) + 3);
+
+    // prior（グレー）→ posterior（ブルー）
+    drawEllipse(ctx, sc, xm, Pm, 2, '#6a677a', 'rgba(106,103,122,0.16)');
+    drawEllipse(ctx, sc, xf, Pf, 2, '#38bdf8', 'rgba(56,189,248,0.20)');
+
+    // 平均 + カルマン更新の矢印
+    drawArrow(ctx, sc.sx(xm[0]), sc.sy(xm[1]), sc.sx(xf[0]), sc.sy(xf[1]), '#fbbf24', 1.6);
+    ctx.beginPath(); ctx.arc(sc.sx(xm[0]), sc.sy(xm[1]), 4, 0, Math.PI * 2); ctx.fillStyle = '#6a677a'; ctx.fill();
+    ctx.beginPath(); ctx.arc(sc.sx(xf[0]), sc.sy(xf[1]), 5, 0, Math.PI * 2); ctx.fillStyle = '#38bdf8'; ctx.fill(); ctx.strokeStyle = '#0d0d14'; ctx.lineWidth = 2; ctx.stroke();
+
+    // 数値
+    document.getElementById('priorVal2').textContent = '(' + fmt(xm[0]) + ', ' + xm[1].toFixed(3) + ')';
+    document.getElementById('postVal2').textContent = '(' + fmt(xf[0]) + ', ' + xf[1].toFixed(3) + ')';
+    document.getElementById('gainVal2').textContent = '(' + fmt(K[0]) + ', ' + K[1].toFixed(3) + ')';
+    document.getElementById('innovVal2').textContent = fmt(y - xm[0]);
+  }
+
+  // ===========================================================
+  //  Panel C2 : トレンド予測（広がるコーン）と Q_level / Q_slope
+  // ===========================================================
+  let forecastGeo2 = null;   // H ドラッグ用
+
+  function render2C() {
+    const canvas = document.getElementById('proxCanvas2');
+    const { ctx, w, h } = setupCanvas(canvas);
+    ctx.clearRect(0, 0, w, h);
+    const model = curModel2(), kf = S.kf2, y = S.data2.y, xtrue = S.data2.xtrue, H = S.H;
+    const Q = [[S.Qlev, 0], [0, S.Qslp]];
+    const xT = kf.xf[T], PT = kf.Pf[T];
+    const fc = forecast2(model, xT, PT, Q, H);
+    const Tstart = Math.max(0, T - 24), xr = [Tstart, T + H];
+    let lo = Infinity, hi = -Infinity;
+    for (let t = Tstart; t <= T; t++) { lo = Math.min(lo, y[t], kf.xf[t][0]); hi = Math.max(hi, y[t], kf.xf[t][0]); }
+    for (let k = 1; k <= H; k++) { const c = 2 * Math.sqrt(fc.Ps[k - 1][0][0]); lo = Math.min(lo, fc.xs[k - 1][0] - c, xtrue[T + k][0]); hi = Math.max(hi, fc.xs[k - 1][0] + c, xtrue[T + k][0]); }
+    const span = Math.max(hi - lo, 1), yr = [lo - 0.12 * span, hi + 0.12 * span];
+    const pad = { l: 34, r: 14, t: 16, b: 24 };
+    const sc = makeScale(w, h, pad, xr, yr);
+    forecastGeo2 = { l: pad.l, plotW: sc.plotW, xr };
+
+    drawTimeGrid(ctx, sc, w, h, pad);
+
+    // 予測コーン（±2σ）
+    ctx.beginPath(); ctx.moveTo(sc.sx(T), sc.sy(xT[0]));
+    for (let k = 1; k <= H; k++) ctx.lineTo(sc.sx(T + k), sc.sy(fc.xs[k - 1][0] + 2 * Math.sqrt(fc.Ps[k - 1][0][0])));
+    for (let k = H; k >= 1; k--) ctx.lineTo(sc.sx(T + k), sc.sy(fc.xs[k - 1][0] - 2 * Math.sqrt(fc.Ps[k - 1][0][0])));
+    ctx.lineTo(sc.sx(T), sc.sy(xT[0])); ctx.closePath(); ctx.fillStyle = 'rgba(251,191,36,0.13)'; ctx.fill();
+
+    // now 線
+    ctx.strokeStyle = 'rgba(251,191,36,0.5)'; ctx.lineWidth = 1.4; ctx.setLineDash([5, 4]);
+    ctx.beginPath(); ctx.moveTo(sc.sx(T), sc.sy(yr[1])); ctx.lineTo(sc.sx(T), sc.sy(yr[0])); ctx.stroke(); ctx.setLineDash([]);
+    ctx.fillStyle = 'rgba(251,191,36,0.7)'; ctx.font = '10px monospace'; ctx.textAlign = 'left'; ctx.textBaseline = 'top'; ctx.fillText('now (t = T)', sc.sx(T) + 4, sc.sy(yr[1]) + 4);
+
+    // 過去の観測
+    ctx.fillStyle = '#f97316'; for (let t = Tstart; t <= T; t++) { ctx.beginPath(); ctx.arc(sc.sx(t), sc.sy(y[t]), 2.4, 0, Math.PI * 2); ctx.fill(); }
+    // 実際の将来（level）
+    ctx.strokeStyle = 'rgba(232,230,240,0.5)'; ctx.lineWidth = 1.6; ctx.setLineDash([4, 4]); ctx.lineJoin = 'round';
+    ctx.beginPath(); ctx.moveTo(sc.sx(T), sc.sy(xtrue[T][0])); for (let k = 1; k <= H; k++) ctx.lineTo(sc.sx(T + k), sc.sy(xtrue[T + k][0])); ctx.stroke(); ctx.setLineDash([]);
+    ctx.fillStyle = 'rgba(249,115,22,0.4)'; for (let k = 1; k <= H; k++) { ctx.beginPath(); ctx.arc(sc.sx(T + k), sc.sy(y[T + k]), 2, 0, Math.PI * 2); ctx.fill(); }
+    // 過去のフィルタ level
+    ctx.strokeStyle = '#a78bfa'; ctx.lineWidth = 2.2; ctx.lineJoin = 'round';
+    ctx.beginPath(); for (let t = Tstart; t <= T; t++) { const px = sc.sx(t), py = sc.sy(kf.xf[t][0]); if (t === Tstart) ctx.moveTo(px, py); else ctx.lineTo(px, py); } ctx.stroke();
+    // 予測平均（トレンド線）
+    ctx.strokeStyle = '#fbbf24'; ctx.lineWidth = 2.4; ctx.setLineDash([6, 4]); ctx.lineJoin = 'round';
+    ctx.beginPath(); ctx.moveTo(sc.sx(T), sc.sy(xT[0])); for (let k = 1; k <= H; k++) ctx.lineTo(sc.sx(T + k), sc.sy(fc.xs[k - 1][0])); ctx.stroke(); ctx.setLineDash([]);
+    ctx.beginPath(); ctx.arc(sc.sx(T + H), sc.sy(fc.xs[H - 1][0]), 5, 0, Math.PI * 2); ctx.fillStyle = '#fbbf24'; ctx.fill(); ctx.strokeStyle = '#0d0d14'; ctx.lineWidth = 2; ctx.stroke();
+
+    // 数値
+    const fcEnd = fc.xs[H - 1][0], fcSd = Math.sqrt(fc.Ps[H - 1][0][0]);
+    document.getElementById('qlevVal').textContent = S.Qlev.toFixed(4);
+    document.getElementById('qslpVal').textContent = S.Qslp.toFixed(4);
+    document.getElementById('betaVal').textContent = xT[1].toFixed(3);
+    document.getElementById('fcVal2').textContent = fmt(fcEnd) + ' ± ' + fmt(2 * fcSd);
+    const badge = document.getElementById('regimeBadge2');
+    const ratio = S.Qslp / S.Rv;
+    if (ratio < 0.004) { badge.className = 'badge off'; badge.textContent = 'small Q_slope — stiff, near-linear trend'; }
+    else if (ratio > 0.02) { badge.className = 'badge on'; badge.textContent = 'large Q_slope — adaptive slope, fast-widening cone'; }
+    else { badge.className = 'badge on'; badge.textContent = 'moderate Q_slope — slope adapts gradually'; }
+  }
+
+  // ===========================================================
+  //  コントロール同期 / レンダリング
+  // ===========================================================
+  function setFill(fillId, val, min, max) {
+    const el = document.getElementById(fillId);
+    el.style.width = clamp((val - min) / (max - min), 0, 1) * 100 + '%';
+  }
+
+  function syncControls() {
+    if (S.dim === 2) { syncControls2(); return; }
+    // モデルセレクタ
+    document.querySelectorAll('#modelSeg button').forEach(b =>
+      b.classList.toggle('active', b.dataset.model === S.model));
+    document.getElementById('modelSub').textContent = curModel().sub;
+
+    // Q / R
+    document.getElementById('Q').value = S.Q;
+    setFill('fill_Q', S.Q, 0.001, 0.2);
+    document.getElementById('val_Q').textContent = S.Q.toFixed(3);
+    document.getElementById('R').value = S.R;
+    setFill('fill_R', S.R, 0.01, 0.5);
+    document.getElementById('val_R').textContent = S.R.toFixed(3);
+
+    // 時刻カーソル t0
+    document.getElementById('t0').value = S.t0;
+    setFill('fill_t0', S.t0, 0, T);
+    document.getElementById('val_t0').textContent = S.t0.toString();
+
+    // 推定ビュー（フィルタ / 平滑化）
+    document.querySelectorAll('#viewSeg button').forEach(b =>
+      b.classList.toggle('active', b.dataset.view === S.view));
+
+    // 予測ホライズン H
+    document.getElementById('H').value = S.H;
+    setFill('fill_H', S.H, 1, HMAX);
+    document.getElementById('val_H').textContent = S.H.toString();
+
+    // シード表示
+    document.getElementById('seedLbl').textContent = 'seed ' + S.seed;
+  }
+
+  // ベクトルモードのコントロール同期（共有: t0 / view / H / seed）
+  function syncControls2() {
+    document.querySelectorAll('#modelSeg2 button').forEach(b =>
+      b.classList.toggle('active', b.dataset.model2 === S.model2));
+    document.getElementById('Qlev').value = S.Qlev; setFill('fill_Qlev', S.Qlev, 0.0005, 0.05);
+    document.getElementById('val_Qlev').textContent = S.Qlev.toFixed(4);
+    document.getElementById('Qslp').value = S.Qslp; setFill('fill_Qslp', S.Qslp, 0.0002, 0.02);
+    document.getElementById('val_Qslp').textContent = S.Qslp.toFixed(4);
+    document.getElementById('Rv').value = S.Rv; setFill('fill_Rv', S.Rv, 0.05, 1.0);
+    document.getElementById('val_Rv').textContent = S.Rv.toFixed(3);
+    document.getElementById('t0v').value = S.t0; setFill('fill_t0v', S.t0, 0, T);
+    document.getElementById('val_t0v').textContent = S.t0.toString();
+    document.querySelectorAll('#viewSeg2 button').forEach(b =>
+      b.classList.toggle('active', b.dataset.view2 === S.view));
+    document.getElementById('Hv').value = S.H; setFill('fill_Hv', S.H, 1, HMAX);
+    document.getElementById('val_Hv').textContent = S.H.toString();
+    document.getElementById('seedLbl2').textContent = 'seed ' + S.seed;
+  }
+
+  function renderAll() {
+    if (S.dim === 1) { renderStates(); renderUpdate(); renderForecast(); }
+    else { render2A(); render2B(); render2C(); }
+  }
+  function commit() { enforce(); recompute(); syncControls(); renderAll(); }
+
+  // ===========================================================
+  //  初期化
+  // ===========================================================
+  function init() {
+    // モデルセレクタ
+    document.querySelectorAll('#modelSeg button').forEach(b =>
+      b.addEventListener('click', () => { S.model = b.dataset.model; commit(); }));
+
+    // Q / R / t0 スライダー
+    document.getElementById('Q').addEventListener('input', e => { S.Q = parseFloat(e.target.value); commit(); });
+    document.getElementById('R').addEventListener('input', e => { S.R = parseFloat(e.target.value); commit(); });
+    document.getElementById('t0').addEventListener('input', e => { S.t0 = parseInt(e.target.value, 10); commit(); });
+
+    // 推定ビュー（フィルタ / 平滑化）トグル
+    document.querySelectorAll('#viewSeg button').forEach(b =>
+      b.addEventListener('click', () => { S.view = b.dataset.view; commit(); }));
+
+    // 予測ホライズン H スライダー
+    document.getElementById('H').addEventListener('input', e => { S.H = parseInt(e.target.value, 10); commit(); });
+
+    // データ再生成（seed を進める）
+    document.getElementById('regenBtn').addEventListener('click', () => { S.seed = (S.seed + 1) | 0; commit(); });
+
+    // Panel A: ドラッグで時刻カーソル t0 を設定
+    const pc = document.getElementById('primalCanvas');
+    let dragging = false;
+    function setT0FromEvent(e) {
+      if (!primalGeo) return;
+      const rect = pc.getBoundingClientRect();
+      const frac = (e.clientX - rect.left - primalGeo.l) / primalGeo.plotW;
+      S.t0 = Math.round(clamp(frac * T, 0, T));
+      commit();
+    }
+    pc.addEventListener('pointerdown', e => { dragging = true; pc.setPointerCapture(e.pointerId); setT0FromEvent(e); });
+    pc.addEventListener('pointermove', e => { if (dragging) setT0FromEvent(e); });
+    pc.addEventListener('pointerup', () => { dragging = false; });
+    pc.addEventListener('pointercancel', () => { dragging = false; });
+
+    // Panel C: ドラッグで予測ホライズン H を設定
+    const xc = document.getElementById('proxCanvas');
+    let fdrag = false;
+    function setHFromEvent(e) {
+      if (!forecastGeo) return;
+      const rect = xc.getBoundingClientRect();
+      const frac = (e.clientX - rect.left - forecastGeo.l) / forecastGeo.plotW;
+      const tt = forecastGeo.xr[0] + frac * (forecastGeo.xr[1] - forecastGeo.xr[0]);
+      S.H = Math.round(clamp(tt - T, 1, HMAX));
+      commit();
+    }
+    xc.addEventListener('pointerdown', e => { fdrag = true; xc.setPointerCapture(e.pointerId); setHFromEvent(e); });
+    xc.addEventListener('pointermove', e => { if (fdrag) setHFromEvent(e); });
+    xc.addEventListener('pointerup', () => { fdrag = false; });
+    xc.addEventListener('pointercancel', () => { fdrag = false; });
+
+    // -------- ベクトルモードのコントロール --------
+    document.querySelectorAll('#modelSeg2 button').forEach(b =>
+      b.addEventListener('click', () => { S.model2 = b.dataset.model2; commit(); }));
+    document.getElementById('Qlev').addEventListener('input', e => { S.Qlev = parseFloat(e.target.value); commit(); });
+    document.getElementById('Qslp').addEventListener('input', e => { S.Qslp = parseFloat(e.target.value); commit(); });
+    document.getElementById('Rv').addEventListener('input', e => { S.Rv = parseFloat(e.target.value); commit(); });
+    document.getElementById('t0v').addEventListener('input', e => { S.t0 = parseInt(e.target.value, 10); commit(); });
+    document.getElementById('Hv').addEventListener('input', e => { S.H = parseInt(e.target.value, 10); commit(); });
+    document.querySelectorAll('#viewSeg2 button').forEach(b =>
+      b.addEventListener('click', () => { S.view = b.dataset.view2; commit(); }));
+    document.getElementById('regenBtn2').addEventListener('click', () => { S.seed = (S.seed + 1) | 0; commit(); });
+
+    // Panel A2: ドラッグで時刻カーソル t0
+    const pc2 = document.getElementById('primalCanvas2');
+    let dragging2 = false;
+    function setT0FromEvent2(e) {
+      if (!primalGeo2) return;
+      const rect = pc2.getBoundingClientRect();
+      const frac = (e.clientX - rect.left - primalGeo2.l) / primalGeo2.plotW;
+      S.t0 = Math.round(clamp(frac * T, 0, T));
+      commit();
+    }
+    pc2.addEventListener('pointerdown', e => { dragging2 = true; pc2.setPointerCapture(e.pointerId); setT0FromEvent2(e); });
+    pc2.addEventListener('pointermove', e => { if (dragging2) setT0FromEvent2(e); });
+    pc2.addEventListener('pointerup', () => { dragging2 = false; });
+    pc2.addEventListener('pointercancel', () => { dragging2 = false; });
+
+    // Panel C2: ドラッグで予測ホライズン H
+    const xc2 = document.getElementById('proxCanvas2');
+    let fdrag2 = false;
+    function setHFromEvent2(e) {
+      if (!forecastGeo2) return;
+      const rect = xc2.getBoundingClientRect();
+      const frac = (e.clientX - rect.left - forecastGeo2.l) / forecastGeo2.plotW;
+      const tt = forecastGeo2.xr[0] + frac * (forecastGeo2.xr[1] - forecastGeo2.xr[0]);
+      S.H = Math.round(clamp(tt - T, 1, HMAX));
+      commit();
+    }
+    xc2.addEventListener('pointerdown', e => { fdrag2 = true; xc2.setPointerCapture(e.pointerId); setHFromEvent2(e); });
+    xc2.addEventListener('pointermove', e => { if (fdrag2) setHFromEvent2(e); });
+    xc2.addEventListener('pointerup', () => { fdrag2 = false; });
+    xc2.addEventListener('pointercancel', () => { fdrag2 = false; });
+
+    // 次元トグル（スカラー / ベクトル）
+    document.querySelectorAll('#dimToggle button').forEach(b =>
+      b.addEventListener('click', () => {
+        S.dim = parseInt(b.dataset.dim, 10);
+        document.body.className = S.dim === 1 ? 'mode1' : 'mode2';
+        document.querySelectorAll('#dimToggle button').forEach(x =>
+          x.classList.toggle('active', x.dataset.dim === b.dataset.dim));
+        commit();
+      }));
+
+    document.body.className = 'mode1';
+    commit();
+    window.addEventListener('resize', renderAll);
+  }
+
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
+  else init();
+
+})();
+</script>
+</body>
+</html>
