@@ -34,6 +34,15 @@
     </p>
     <a href="https://takafumi-tsukazaki.github.io/tools/Subdifferential/subdifferential_visualizer.html" target="_blank" rel="noopener noreferrer">Open tool</a>
   </div>
+
+  <div class="tool-card">
+    <h2> State Space Model Visualizer</h2>
+    <p>
+    This interactive visualizer builds intuition for state space models — a hidden state that evolves through a state equation and is seen only through noisy observations — and shows how the Kalman filter recovers that state step by step. In scalar mode you can explore the Local Level and AR(1) models: Panel A plots the hidden state, the data, and the filtered (or RTS-smoothed) estimate with its ±2σ band, while Panel B opens up a single step as a predict → update tug-of-war between the model's prediction and the observation, weighted by the Kalman gain. Panel C forecasts beyond the data with a widening uncertainty cone and ties the signal-to-noise ratio q = Q/R to the steady-state gain and exponential smoothing. Switching to vector mode brings up the Local Linear Trend model, decomposing the state into level and slope, drawing the 2D predict → update as shrinking covariance ellipses, and forecasting a trend whose cone widens as slope uncertainty compounds. Every panel updates live as you drag the time cursor and tune the process noise Q, observation noise R, and forecast horizon H.<br><br>
+    状態空間モデルに関するvisualizerです。カルマンフィルタがその状態を一歩ずつ復元する様子を示します。スカラーモードでは局所レベルモデルと AR(1) モデルを扱えます。隠れ状態・観測データ・フィルタ（または RTS 平滑化）推定を ±2σ 帯とともに描き、 1 ステップを「モデルの予測」と「観測」の綱引き（カルマンゲインによる重み付け）として予測 → 更新に分解します可視化が実装されています。データの先を予測して広がる不確実性コーンを描き、信号対雑音比 q = Q/R を定常ゲインと指数平滑に結びつけます。ベクトルモードに切り替えると局所線形トレンドモデルが現れ、状態を level と slope に分解し、2 次元の予測 → 更新を縮む共分散楕円として描き、slope の不確実性が積み重なってコーンが広がるトレンド予測を示します。時刻カーソルをドラッグし、プロセスノイズ Q・観測ノイズ R・予測ホライズン H を調整すると、すべてのパネルがリアルタイムに更新されます。
+    </p>
+    <a href="https://takafumi-tsukazaki.github.io/tools/State Space Model/statespace_visualizer.html" target="_blank" rel="noopener noreferrer">Open tool</a>
+  </div>
   
 </body>
 </html>
